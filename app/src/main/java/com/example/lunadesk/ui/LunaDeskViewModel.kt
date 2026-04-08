@@ -150,7 +150,6 @@ class LunaDeskViewModel(
                     )
                 }
                 persistCurrentSettings()
-                showMessage("模型列表已更新")
             }.onFailure {
                 _uiState.update { it.copy(isLoadingModels = false) }
                 showMessage(readableError(it))
@@ -254,6 +253,18 @@ class LunaDeskViewModel(
                         msg
                     }
                 }
+            )
+        }
+    }
+
+    fun resetConversation() {
+        container.lmStudioRepository.cancelActiveChat()
+        _uiState.update {
+            it.copy(
+                messages = emptyList(),
+                chatInput = "",
+                isSending = false,
+                inlineMessage = "已重置本轮对话"
             )
         }
     }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,10 +18,10 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.lunadesk.data.model.ModelInfo
 import com.example.lunadesk.ui.LunaDeskUiState
@@ -34,19 +35,13 @@ fun SettingsScreen(
     onSave: () -> Unit,
     onTestConnection: () -> Unit,
     onRefreshModels: () -> Unit,
-    onSwitchModel: (String) -> Unit,
-    onDismissMessage: () -> Unit
+    onSwitchModel: (String) -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Header()
-
-        state.inlineMessage?.let {
-            InlineMessage(message = it, onDismiss = onDismissMessage)
-        }
-
         ConfigCard(
             state = state,
             onBaseUrlChange = onBaseUrlChange,
@@ -56,12 +51,29 @@ fun SettingsScreen(
             onTestConnection = onTestConnection,
             onRefreshModels = onRefreshModels
         )
-
         ModelListCard(
             modifier = Modifier.weight(1f),
             state = state,
             onSwitchModel = onSwitchModel
         )
+    }
+}
+
+@Composable
+private fun Header() {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFD7E5D5))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text("LunaDesk 设置", style = MaterialTheme.typography.titleMedium)
+            Text("拉取模型后直接点选目标模型。", style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
 
@@ -76,14 +88,14 @@ private fun ConfigCard(
     onRefreshModels: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFDFBF7))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             OutlinedTextField(
                 value = state.baseUrl,
@@ -91,12 +103,11 @@ private fun ConfigCard(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 label = { Text("LM Studio 地址") },
-                placeholder = { Text("http://192.168.31.30:1234") },
-                supportingText = { Text("覆盖安装后会继续保留这份配置") }
+                placeholder = { Text("http://192.168.31.30:1234") }
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedTextField(
                     value = state.temperatureInput,
@@ -115,25 +126,25 @@ private fun ConfigCard(
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(onClick = onSave, modifier = Modifier.weight(1f)) {
-                    Text("保存配置")
+                    Text("保存")
                 }
                 Button(
                     onClick = onTestConnection,
                     enabled = !state.isTestingConnection,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(if (state.isTestingConnection) "测试中" else "连接测试")
+                    Text(if (state.isTestingConnection) "测试中" else "测试")
                 }
-            }
-            Button(
-                onClick = onRefreshModels,
-                enabled = !state.isLoadingModels,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(if (state.isLoadingModels) "拉取中" else "拉取模型")
+                Button(
+                    onClick = onRefreshModels,
+                    enabled = !state.isLoadingModels,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(if (state.isLoadingModels) "拉取中" else "拉取")
+                }
             }
         }
     }
@@ -147,26 +158,31 @@ private fun ModelListCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xF7FFFDF8))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text("模型列表", style = MaterialTheme.typography.titleLarge)
-            Text(state.connectionStatus ?: "拉取后直接展示完整模型列表")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("模型列表", style = MaterialTheme.typography.titleMedium)
+                Text("${state.models.size} 个", style = MaterialTheme.typography.bodySmall)
+            }
             if (state.isSwitchingModel) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
             if (state.models.isEmpty()) {
-                Text("暂未获取到模型，请先点击“拉取模型”。")
+                Text("暂未获取到模型，请先点击“拉取”。")
             } else {
                 LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(state.models, key = { it.id }) { model ->
                         ModelRow(
@@ -178,37 +194,6 @@ private fun ModelListCard(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun Header() {
-    Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFD7E5D5))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text("LunaDesk 设置", style = MaterialTheme.typography.titleLarge)
-            Text("拉取模型后直接点选目标模型。")
-        }
-    }
-}
-
-@Composable
-private fun InlineMessage(message: String, onDismiss: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(message, modifier = Modifier.weight(1f))
-        TextButton(onClick = onDismiss) {
-            Text("关闭")
         }
     }
 }
@@ -227,34 +212,30 @@ private fun ModelRow(
     }
 
     Card(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = background),
         modifier = Modifier.clickable(enabled = !selected && !isSwitching, onClick = onClick)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+                .height(48.dp)
+                .padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
         ) {
-            Column(
+            Text(
+                text = model.id,
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(model.id, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    when {
-                        isSwitching -> "切换中..."
-                        selected -> "当前模型"
-                        else -> "点击切换到该模型"
-                    }
-                )
-            }
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyLarge
+            )
             Text(
                 text = when {
-                    isSwitching -> "..."
-                    selected -> "已选"
-                    else -> "选择"
+                    isSwitching -> "切换中"
+                    selected -> "当前"
+                    else -> "待选"
                 },
                 color = Color(0xFF2A4B45),
                 style = MaterialTheme.typography.labelLarge
