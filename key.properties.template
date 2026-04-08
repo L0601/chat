@@ -1,0 +1,4 @@
+storeFile=keystore/lunadesk.jks
+storePassword=your-store-password
+keyAlias=lunadesk
+keyPassword=your-key-password

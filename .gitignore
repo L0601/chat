@@ -4,7 +4,8 @@
 /build
 /captures
 /local.properties
+/key.properties
+/keystore
 /.idea
 /.kotlin
 app/build
-

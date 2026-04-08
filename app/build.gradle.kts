@@ -5,6 +5,25 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+import java.util.Properties
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
+val signingProperties = Properties().apply {
+    val file = rootProject.file("key.properties")
+    if (file.exists()) {
+        file.inputStream().use(::load)
+    }
+}
+val generatedVersionCode = providers.environmentVariable("LUNADESK_VERSION_CODE")
+    .orNull
+    ?.toIntOrNull()
+    ?: LocalDateTime.now().let { now ->
+        val year = now.year - 2020
+        val tail = now.format(DateTimeFormatter.ofPattern("MMddHHmm")).toInt()
+        year * 100_000_000 + tail
+    }
+
 android {
     namespace = "com.example.lunadesk"
     compileSdk = 35
@@ -13,7 +32,7 @@ android {
         applicationId = "com.example.lunadesk"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
+        versionCode = generatedVersionCode
         versionName = "0.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -23,8 +42,16 @@ android {
     }
 
     buildTypes {
+        debug {
+            if (signingProperties.isNotEmpty()) {
+                signingConfig = signingConfigs.getByName("debug")
+            }
+        }
         release {
             isMinifyEnabled = false
+            if (signingProperties.isNotEmpty()) {
+                signingConfig = signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -51,6 +78,17 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    signingConfigs {
+        if (signingProperties.isNotEmpty()) {
+            getByName("debug") {
+                storeFile = rootProject.file(signingProperties.getProperty("storeFile"))
+                storePassword = signingProperties.getProperty("storePassword")
+                keyAlias = signingProperties.getProperty("keyAlias")
+                keyPassword = signingProperties.getProperty("keyPassword")
+            }
+        }
+    }
 }
 
 dependencies {
@@ -72,6 +110,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("io.noties.markwon:core:4.6.2")
 
     testImplementation("junit:junit:4.13.2")
 

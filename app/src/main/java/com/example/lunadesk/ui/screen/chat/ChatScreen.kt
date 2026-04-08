@@ -1,5 +1,6 @@
 package com.example.lunadesk.ui.screen.chat
 
+import android.widget.TextView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,13 +24,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.example.lunadesk.data.model.ChatMessageUi
 import com.example.lunadesk.ui.LunaDeskUiState
+import io.noties.markwon.Markwon
 
 @Composable
 fun ChatScreen(
@@ -49,7 +54,7 @@ fun ChatScreen(
 
     Column(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         ChatHeader(state = state)
 
@@ -59,7 +64,7 @@ fun ChatScreen(
 
         Surface(
             modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(32.dp),
+            shape = RoundedCornerShape(28.dp),
             color = Color(0xF9FFFDF8)
         ) {
             if (state.messages.isEmpty()) {
@@ -68,9 +73,9 @@ fun ChatScreen(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 14.dp, vertical = 16.dp),
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
                     state = listState,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(state.messages, key = { it.id }) { message ->
                         MessageBubble(message = message)
@@ -93,8 +98,8 @@ private fun ChatHeader(state: LunaDeskUiState) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xD92A4B45), RoundedCornerShape(24.dp))
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .background(Color(0xD92A4B45), RoundedCornerShape(20.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -126,29 +131,26 @@ private fun ComposerBar(
     onStop: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(30.dp),
+        shape = RoundedCornerShape(24.dp),
         color = Color(0xFFF9F6EC),
         shadowElevation = 6.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Bottom
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedTextField(
                 modifier = Modifier.weight(1f),
                 value = state.chatInput,
                 onValueChange = onInputChange,
-                minLines = 2,
-                maxLines = 6,
-                shape = RoundedCornerShape(24.dp),
+                minLines = 1,
+                maxLines = 5,
+                shape = RoundedCornerShape(18.dp),
                 label = { Text("输入消息") },
-                placeholder = { Text("输入问题后直接发送") },
-                supportingText = {
-                    Text(if (state.isSending) "正在生成回答" else " ")
-                }
+                placeholder = { Text("输入问题后直接发送") }
             )
             Button(
                 onClick = if (state.isSending) onStop else onSend,
@@ -157,8 +159,7 @@ private fun ComposerBar(
                     containerColor = if (state.isSending) Color(0xFFB55D48) else Color(0xFF2A4B45),
                     contentColor = Color.White
                 ),
-                modifier = Modifier
-                    .size(width = 72.dp, height = 52.dp),
+                modifier = Modifier.size(width = 78.dp, height = 56.dp),
                 shape = RoundedCornerShape(18.dp)
             ) {
                 Text(if (state.isSending) "停止" else "发送")
@@ -195,20 +196,19 @@ private fun MessageBubble(message: ChatMessageUi) {
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
     ) {
         Surface(
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(22.dp),
             color = background,
             tonalElevation = 0.dp,
             modifier = Modifier
-                .fillMaxWidth(0.88f)
-                .heightIn(min = 56.dp)
+                .fillMaxWidth(0.92f)
+                .heightIn(min = 52.dp)
         ) {
-            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = message.content.ifBlank {
+                    MarkdownText(
+                        markdown = message.content.ifBlank {
                             if (message.isStreaming) "正在生成..." else "暂无内容"
-                        },
-                        color = Color(0xFF21302D)
+                        }
                     )
                     message.errorText?.let {
                         Text(text = it, color = MaterialTheme.colorScheme.error)
@@ -220,12 +220,32 @@ private fun MessageBubble(message: ChatMessageUi) {
 }
 
 @Composable
+private fun MarkdownText(markdown: String) {
+    val context = LocalContext.current
+    val markwon = remember(context) { Markwon.create(context) }
+
+    AndroidView(
+        factory = { ctx ->
+            TextView(ctx).apply {
+                setTextColor(android.graphics.Color.parseColor("#21302D"))
+                textSize = 15f
+                setLineSpacing(0f, 1.18f)
+            }
+        },
+        update = { textView ->
+            markwon.setMarkdown(textView, markdown)
+        },
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+@Composable
 private fun InlineNotice(message: String, onDismiss: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFFFCECC8), RoundedCornerShape(18.dp))
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .background(Color(0xFFFCECC8), RoundedCornerShape(16.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {

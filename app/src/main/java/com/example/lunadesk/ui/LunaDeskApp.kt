@@ -57,8 +57,8 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 when (state.currentTab) {
                     AppTab.Chat -> ChatScreen(

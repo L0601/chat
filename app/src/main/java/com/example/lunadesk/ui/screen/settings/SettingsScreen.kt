@@ -39,7 +39,7 @@ fun SettingsScreen(
 ) {
     Column(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Header()
 
@@ -58,6 +58,7 @@ fun SettingsScreen(
         )
 
         ModelListCard(
+            modifier = Modifier.weight(1f),
             state = state,
             onSwitchModel = onSwitchModel
         )
@@ -75,19 +76,20 @@ private fun ConfigCard(
     onRefreshModels: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFDFBF7))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             OutlinedTextField(
                 value = state.baseUrl,
                 onValueChange = onBaseUrlChange,
                 modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
                 label = { Text("LM Studio 地址") },
                 placeholder = { Text("http://192.168.31.30:1234") },
                 supportingText = { Text("覆盖安装后会继续保留这份配置") }
@@ -100,12 +102,14 @@ private fun ConfigCard(
                     value = state.temperatureInput,
                     onValueChange = onTemperatureChange,
                     modifier = Modifier.weight(1f),
+                    singleLine = true,
                     label = { Text("温度") }
                 )
                 OutlinedTextField(
                     value = state.maxTokensInput,
                     onValueChange = onMaxTokensChange,
                     modifier = Modifier.weight(1f),
+                    singleLine = true,
                     label = { Text("最大输出") }
                 )
             }
@@ -137,19 +141,20 @@ private fun ConfigCard(
 
 @Composable
 private fun ModelListCard(
+    modifier: Modifier = Modifier,
     state: LunaDeskUiState,
     onSwitchModel: (String) -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxSize(),
-        shape = RoundedCornerShape(28.dp),
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xF7FFFDF8))
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .fillMaxSize()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text("模型列表", style = MaterialTheme.typography.titleLarge)
             Text(state.connectionStatus ?: "拉取后直接展示完整模型列表")
@@ -160,7 +165,7 @@ private fun ModelListCard(
                 Text("暂未获取到模型，请先点击“拉取模型”。")
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(state.models, key = { it.id }) { model ->
@@ -180,16 +185,16 @@ private fun ModelListCard(
 @Composable
 private fun Header() {
     Card(
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFD7E5D5))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text("LunaDesk 设置", style = MaterialTheme.typography.headlineSmall)
+            Text("LunaDesk 设置", style = MaterialTheme.typography.titleLarge)
             Text("拉取模型后直接点选目标模型。")
         }
     }
