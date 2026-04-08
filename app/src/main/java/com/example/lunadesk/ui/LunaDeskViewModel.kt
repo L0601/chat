@@ -21,10 +21,18 @@ enum class AppTab(val title: String) {
     Settings("设置")
 }
 
+enum class ModelFilter(val title: String) {
+    All("全部"),
+    Current("当前"),
+    Switchable("可切换")
+}
+
 data class LunaDeskUiState(
     val currentTab: AppTab = AppTab.Chat,
     val baseUrl: String = "",
     val selectedModel: String = "",
+    val modelSearchQuery: String = "",
+    val modelFilter: ModelFilter = ModelFilter.All,
     val temperatureInput: String = "0.7",
     val maxTokensInput: String = "2048",
     val models: List<ModelInfo> = emptyList(),
@@ -34,6 +42,7 @@ data class LunaDeskUiState(
     val isLoadingModels: Boolean = false,
     val isTestingConnection: Boolean = false,
     val isSwitchingModel: Boolean = false,
+    val switchingModelId: String? = null,
     val isSending: Boolean = false,
     val inlineMessage: String? = null
 )
@@ -68,6 +77,14 @@ class LunaDeskViewModel(
 
     fun updateTemperature(value: String) {
         _uiState.update { it.copy(temperatureInput = value) }
+    }
+
+    fun updateModelSearchQuery(value: String) {
+        _uiState.update { it.copy(modelSearchQuery = value) }
+    }
+
+    fun updateModelFilter(value: ModelFilter) {
+        _uiState.update { it.copy(modelFilter = value) }
     }
 
     fun updateMaxTokens(value: String) {
@@ -145,9 +162,7 @@ class LunaDeskViewModel(
                         models = models,
                         isLoadingModels = false,
                         connectionStatus = "连接正常，已获取 ${models.size} 个模型",
-                        selectedModel = state.selectedModel.ifBlank {
-                            models.firstOrNull()?.id.orEmpty()
-                        }
+                        selectedModel = resolveSelectedModel(state.selectedModel, models)
                     )
                 }
                 persistCurrentSettings()
@@ -166,7 +181,13 @@ class LunaDeskViewModel(
             return
         }
         viewModelScope.launch {
-            _uiState.update { it.copy(isSwitchingModel = true, inlineMessage = null) }
+            _uiState.update {
+                it.copy(
+                    isSwitchingModel = true,
+                    switchingModelId = modelId,
+                    inlineMessage = null
+                )
+            }
             runCatching {
                 container.lmStudioRepository.loadModel(baseUrl, modelId)
             }.onSuccess {
@@ -174,13 +195,19 @@ class LunaDeskViewModel(
                     it.copy(
                         selectedModel = modelId,
                         isSwitchingModel = false,
+                        switchingModelId = null,
                         connectionStatus = "当前模型：$modelId"
                     )
                 }
                 persistCurrentSettings()
                 showMessage("已切换到 $modelId")
             }.onFailure {
-                _uiState.update { it.copy(isSwitchingModel = false) }
+                _uiState.update {
+                    it.copy(
+                        isSwitchingModel = false,
+                        switchingModelId = null
+                    )
+                }
                 showMessage(readableError(it))
             }
         }
@@ -359,4 +386,14 @@ class LunaDeskViewModel(
     private fun readableError(error: Throwable): String {
         return error.message ?: "请求失败，请稍后重试"
     }
+}
+
+internal fun resolveSelectedModel(
+    selectedModel: String,
+    models: List<ModelInfo>
+): String {
+    if (selectedModel.isBlank()) return ""
+    return selectedModel.takeIf { current ->
+        models.any { it.id == current }
+    }.orEmpty()
 }
