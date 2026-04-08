@@ -71,8 +71,6 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
                     AppTab.Settings -> SettingsScreen(
                         state = state,
                         onBaseUrlChange = viewModel::updateBaseUrl,
-                        onModelSearchQueryChange = viewModel::updateModelSearchQuery,
-                        onModelFilterChange = viewModel::updateModelFilter,
                         onTemperatureChange = viewModel::updateTemperature,
                         onMaxTokensChange = viewModel::updateMaxTokens,
                         onSave = viewModel::saveSettings,

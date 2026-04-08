@@ -1,5 +1,6 @@
 package com.example.lunadesk.ui.screen.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,14 +24,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.lunadesk.data.model.ModelInfo
 import com.example.lunadesk.ui.LunaDeskUiState
-import com.example.lunadesk.ui.ModelFilter
 
 @Composable
 fun SettingsScreen(
     state: LunaDeskUiState,
     onBaseUrlChange: (String) -> Unit,
-    onModelSearchQueryChange: (String) -> Unit,
-    onModelFilterChange: (ModelFilter) -> Unit,
     onTemperatureChange: (String) -> Unit,
     onMaxTokensChange: (String) -> Unit,
     onSave: () -> Unit,
@@ -39,13 +37,6 @@ fun SettingsScreen(
     onSwitchModel: (String) -> Unit,
     onDismissMessage: () -> Unit
 ) {
-    val visibleModels = visibleModels(
-        models = state.models,
-        selectedModel = state.selectedModel,
-        query = state.modelSearchQuery,
-        filter = state.modelFilter
-    )
-
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -68,9 +59,6 @@ fun SettingsScreen(
 
         ModelListCard(
             state = state,
-            visibleModels = visibleModels,
-            onModelSearchQueryChange = onModelSearchQueryChange,
-            onModelFilterChange = onModelFilterChange,
             onSwitchModel = onSwitchModel
         )
     }
@@ -136,23 +124,12 @@ private fun ConfigCard(
                     Text(if (state.isTestingConnection) "测试中" else "连接测试")
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Button(
+                onClick = onRefreshModels,
+                enabled = !state.isLoadingModels,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Button(
-                    onClick = onRefreshModels,
-                    enabled = !state.isLoadingModels,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(if (state.isLoadingModels) "刷新中" else "拉取模型")
-                }
-                Text(
-                    text = state.connectionStatus ?: "尚未测试连接",
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF39534B)
-                )
+                Text(if (state.isLoadingModels) "拉取中" else "拉取模型")
             }
         }
     }
@@ -161,14 +138,10 @@ private fun ConfigCard(
 @Composable
 private fun ModelListCard(
     state: LunaDeskUiState,
-    visibleModels: List<ModelInfo>,
-    onModelSearchQueryChange: (String) -> Unit,
-    onModelFilterChange: (ModelFilter) -> Unit,
     onSwitchModel: (String) -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xF7FFFDF8))
     ) {
@@ -179,47 +152,23 @@ private fun ModelListCard(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text("模型列表", style = MaterialTheme.typography.titleLarge)
-            Text("共 ${state.models.size} 个模型，当前显示 ${visibleModels.size} 个。")
+            Text(state.connectionStatus ?: "拉取后直接展示完整模型列表")
             if (state.isSwitchingModel) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
-            OutlinedTextField(
-                value = state.modelSearchQuery,
-                onValueChange = onModelSearchQueryChange,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text("搜索模型") },
-                placeholder = { Text("按模型名筛选") }
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                ModelFilter.entries.forEach { filter ->
-                    Button(
-                        onClick = { onModelFilterChange(filter) },
-                        modifier = Modifier.weight(1f),
-                        enabled = state.modelFilter != filter
-                    ) {
-                        Text(filter.title)
-                    }
-                }
-            }
-            if (visibleModels.isEmpty()) {
-                Text(
-                    if (state.models.isEmpty()) "暂未获取到模型，请先点击“拉取模型”。" else "没有匹配的模型。"
-                )
+            if (state.models.isEmpty()) {
+                Text("暂未获取到模型，请先点击“拉取模型”。")
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(visibleModels, key = { it.id }) { model ->
+                    items(state.models, key = { it.id }) { model ->
                         ModelRow(
                             model = model,
                             selected = model.id == state.selectedModel,
                             isSwitching = state.switchingModelId == model.id,
-                            onSwitchModel = onSwitchModel
+                            onClick = { onSwitchModel(model.id) }
                         )
                     }
                 }
@@ -241,7 +190,7 @@ private fun Header() {
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text("LunaDesk 设置", style = MaterialTheme.typography.headlineSmall)
-            Text("连接局域网模型服务、筛选模型并完成切换。")
+            Text("拉取模型后直接点选目标模型。")
         }
     }
 }
@@ -264,18 +213,23 @@ private fun ModelRow(
     model: ModelInfo,
     selected: Boolean,
     isSwitching: Boolean,
-    onSwitchModel: (String) -> Unit
+    onClick: () -> Unit
 ) {
+    val background = when {
+        selected -> Color(0xFFE0ECE5)
+        isSwitching -> Color(0xFFF7E8C8)
+        else -> Color(0xFFF7F1E0)
+    }
+
     Card(
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (selected) Color(0xFFE0ECE5) else Color(0xFFF7F1E0)
-        )
+        colors = CardDefaults.cardColors(containerColor = background),
+        modifier = Modifier.clickable(enabled = !selected && !isSwitching, onClick = onClick)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(14.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(
@@ -284,46 +238,22 @@ private fun ModelRow(
             ) {
                 Text(model.id, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = when {
-                        selected -> "当前模型"
-                        model.ownedBy != null -> "来源：${model.ownedBy}"
-                        else -> "可切换模型"
-                    }
-                )
-            }
-            Button(
-                onClick = { onSwitchModel(model.id) },
-                enabled = !isSwitching && !selected
-            ) {
-                Text(
                     when {
-                        isSwitching -> "切换中"
-                        selected -> "已选中"
-                        else -> "切换"
+                        isSwitching -> "切换中..."
+                        selected -> "当前模型"
+                        else -> "点击切换到该模型"
                     }
                 )
             }
+            Text(
+                text = when {
+                    isSwitching -> "..."
+                    selected -> "已选"
+                    else -> "选择"
+                },
+                color = Color(0xFF2A4B45),
+                style = MaterialTheme.typography.labelLarge
+            )
         }
     }
-}
-
-private fun visibleModels(
-    models: List<ModelInfo>,
-    selectedModel: String,
-    query: String,
-    filter: ModelFilter
-): List<ModelInfo> {
-    val keyword = query.trim()
-    val filtered = models.filter { model ->
-        val matchesKeyword = keyword.isBlank() || model.id.contains(keyword, ignoreCase = true)
-        val matchesFilter = when (filter) {
-            ModelFilter.All -> true
-            ModelFilter.Current -> model.id == selectedModel
-            ModelFilter.Switchable -> model.id != selectedModel
-        }
-        matchesKeyword && matchesFilter
-    }
-    val selected = filtered.firstOrNull { it.id == selectedModel }
-    val others = filtered.filterNot { it.id == selectedModel }
-    return listOfNotNull(selected) + others
 }

@@ -21,18 +21,10 @@ enum class AppTab(val title: String) {
     Settings("设置")
 }
 
-enum class ModelFilter(val title: String) {
-    All("全部"),
-    Current("当前"),
-    Switchable("可切换")
-}
-
 data class LunaDeskUiState(
     val currentTab: AppTab = AppTab.Chat,
     val baseUrl: String = "",
     val selectedModel: String = "",
-    val modelSearchQuery: String = "",
-    val modelFilter: ModelFilter = ModelFilter.All,
     val temperatureInput: String = "0.7",
     val maxTokensInput: String = "2048",
     val models: List<ModelInfo> = emptyList(),
@@ -77,14 +69,6 @@ class LunaDeskViewModel(
 
     fun updateTemperature(value: String) {
         _uiState.update { it.copy(temperatureInput = value) }
-    }
-
-    fun updateModelSearchQuery(value: String) {
-        _uiState.update { it.copy(modelSearchQuery = value) }
-    }
-
-    fun updateModelFilter(value: ModelFilter) {
-        _uiState.update { it.copy(modelFilter = value) }
     }
 
     fun updateMaxTokens(value: String) {
