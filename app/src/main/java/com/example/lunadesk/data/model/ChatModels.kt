@@ -72,6 +72,7 @@ data class ChatStreamDelta(
 data class StreamChunk(
     val delta: String = "",
     val done: Boolean = false,
+    val cancelled: Boolean = false,
     val error: String? = null
 )
 
@@ -82,4 +83,3 @@ data class ChatMessageUi(
     val isStreaming: Boolean = false,
     val errorText: String? = null
 )
-

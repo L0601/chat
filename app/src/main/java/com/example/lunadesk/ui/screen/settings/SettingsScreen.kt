@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,6 +31,7 @@ fun SettingsScreen(
     onTemperatureChange: (String) -> Unit,
     onMaxTokensChange: (String) -> Unit,
     onSave: () -> Unit,
+    onTestConnection: () -> Unit,
     onRefreshModels: () -> Unit,
     onSwitchModel: (String) -> Unit,
     onDismissMessage: () -> Unit
@@ -59,7 +61,8 @@ fun SettingsScreen(
                     onValueChange = onBaseUrlChange,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("LM Studio 地址") },
-                    placeholder = { Text("http://192.168.31.30:1234") }
+                    placeholder = { Text("http://192.168.31.30:1234") },
+                    supportingText = { Text("示例：本地局域网内运行的 LM Studio OpenAI 兼容地址") }
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
@@ -80,12 +83,27 @@ fun SettingsScreen(
                         Text("保存配置")
                     }
                     Button(
+                        onClick = onTestConnection,
+                        enabled = !state.isTestingConnection,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (state.isTestingConnection) "测试中" else "连接测试")
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
                         onClick = onRefreshModels,
                         enabled = !state.isLoadingModels,
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(if (state.isLoadingModels) "刷新中" else "拉取模型")
                     }
+                    Text(
+                        text = state.connectionStatus ?: "尚未测试连接",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFF39534B)
+                    )
                 }
             }
         }
@@ -98,7 +116,8 @@ fun SettingsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .heightIn(min = 160.dp, max = 360.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text("模型列表", style = MaterialTheme.typography.titleLarge)

@@ -22,7 +22,9 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import java.net.SocketTimeoutException
 import java.io.IOException
+import java.util.concurrent.CancellationException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -32,6 +34,15 @@ class LmStudioRepository(
 ) {
     @Volatile
     private var activeChatCall: Call? = null
+
+    suspend fun testConnection(baseUrl: String): Int {
+        val request = Request.Builder()
+            .url("${normalizeBaseUrl(baseUrl)}/v1/models")
+            .get()
+            .build()
+
+        return execute(request) { 200 }
+    }
 
     suspend fun fetchModels(baseUrl: String): List<ModelInfo> {
         val request = Request.Builder()
@@ -71,11 +82,14 @@ class LmStudioRepository(
                         val reader = response.body?.charStream()?.buffered()
                             ?: throw IOException("响应体为空")
                         val pending = StringBuilder()
+                        var completed = false
 
                         reader.useLines { lines ->
                             lines.forEach { line ->
                                 if (line.startsWith("data:")) {
                                     pending.append(line.removePrefix("data:").trim()).append('\n')
+                                } else if (line.startsWith("event:")) {
+                                    pending.append(line.trim()).append('\n')
                                 } else if (line.isBlank()) {
                                     val done = parseEvent(pending.toString()) { delta ->
                                         if (delta.isNotBlank()) {
@@ -84,12 +98,15 @@ class LmStudioRepository(
                                         }
                                     }
                                     pending.clear()
-                                    if (done) return@useLines
+                                    if (done) {
+                                        completed = true
+                                        return@useLines
+                                    }
                                 }
                             }
                         }
 
-                        if (pending.isNotEmpty()) {
+                        if (!completed && pending.isNotEmpty()) {
                             parseEvent(pending.toString()) { delta ->
                                 if (delta.isNotBlank()) {
                                     emittedContent = true
@@ -102,8 +119,13 @@ class LmStudioRepository(
                     trySend(StreamChunk(done = true))
                     close()
                 }.onFailure { error ->
+                    if (error is CancellationException) {
+                        trySend(StreamChunk(cancelled = true))
+                        close()
+                        return@onFailure
+                    }
                     if (emittedContent) {
-                        trySend(StreamChunk(error = error.message ?: "流式响应已中断"))
+                        trySend(StreamChunk(error = humanizeError(error)))
                         close()
                         return@onFailure
                     }
@@ -116,7 +138,7 @@ class LmStudioRepository(
                             trySend(StreamChunk(done = true))
                             close()
                         }.onFailure { fallbackError ->
-                            trySend(StreamChunk(error = fallbackError.message ?: "请求失败"))
+                            trySend(StreamChunk(error = humanizeError(fallbackError)))
                             close()
                         }
                 }
@@ -151,7 +173,17 @@ class LmStudioRepository(
     }
 
     private fun parseEvent(payload: String, onDelta: (String) -> Unit): Boolean {
-        val content = payload.trim()
+        val lines = payload
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toList()
+        if (lines.isEmpty()) return false
+
+        val dataLines = lines.filter { it.startsWith("data:") || !it.startsWith("event:") }
+        val content = dataLines.joinToString("\n") { line ->
+            if (line.startsWith("data:")) line.removePrefix("data:").trim() else line
+        }.trim()
         if (content.isBlank()) return false
         if (content == "[DONE]") return true
 
@@ -202,6 +234,14 @@ class LmStudioRepository(
 
     private fun normalizeBaseUrl(baseUrl: String): String {
         return baseUrl.trim().trimEnd('/')
+    }
+
+    private fun humanizeError(error: Throwable): String {
+        return when (error) {
+            is SocketTimeoutException -> "连接超时，请检查地址或服务状态"
+            is IOException -> error.message ?: "网络请求失败"
+            else -> error.message ?: "请求失败"
+        }
     }
 
     companion object {

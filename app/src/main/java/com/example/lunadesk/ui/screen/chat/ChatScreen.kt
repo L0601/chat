@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,8 +42,10 @@ fun ChatScreen(
     ) {
         HeaderCard(
             title = state.selectedModel.ifBlank { "未选择模型" },
-            subtitle = "流式响应优先，非流式自动降级"
+            subtitle = state.connectionStatus ?: "流式响应优先，非流式自动降级"
         )
+
+        StatusSummary(state = state)
 
         state.inlineMessage?.let {
             InlineNotice(message = it, onDismiss = onDismissMessage)
@@ -57,7 +60,9 @@ fun ChatScreen(
                 EmptyState()
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(state.messages, key = { it.id }) { message ->
@@ -82,8 +87,12 @@ fun ChatScreen(
                     value = state.chatInput,
                     onValueChange = onInputChange,
                     minLines = 3,
+                    maxLines = 6,
                     label = { Text("输入消息") },
-                    placeholder = { Text("例如：请总结一下当前模型服务的状态") }
+                    placeholder = { Text("例如：请总结一下当前模型服务的状态") },
+                    supportingText = {
+                        Text("当前消息数：${state.messages.count { it.content.isNotBlank() }}")
+                    }
                 )
 
                 Row(
@@ -107,6 +116,26 @@ fun ChatScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun StatusSummary(state: LunaDeskUiState) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFF0EEE4), RoundedCornerShape(20.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = "消息 ${state.messages.count { it.content.isNotBlank() }}",
+            color = Color(0xFF31433D)
+        )
+        Text(
+            text = if (state.isSending) "生成中" else "空闲",
+            color = if (state.isSending) Color(0xFF8E5C4A) else Color(0xFF39534B)
+        )
     }
 }
 
@@ -154,7 +183,8 @@ private fun MessageBubble(message: ChatMessageUi) {
         Surface(
             shape = RoundedCornerShape(22.dp),
             color = background,
-            tonalElevation = 0.dp
+            tonalElevation = 0.dp,
+            modifier = Modifier.heightIn(min = 56.dp)
         ) {
             Column(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),

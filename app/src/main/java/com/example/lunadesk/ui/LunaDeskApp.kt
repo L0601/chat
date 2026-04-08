@@ -74,6 +74,7 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
                         onTemperatureChange = viewModel::updateTemperature,
                         onMaxTokensChange = viewModel::updateMaxTokens,
                         onSave = viewModel::saveSettings,
+                        onTestConnection = viewModel::testConnection,
                         onRefreshModels = viewModel::refreshModels,
                         onSwitchModel = viewModel::switchModel,
                         onDismissMessage = viewModel::clearInlineMessage

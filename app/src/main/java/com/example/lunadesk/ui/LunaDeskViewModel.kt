@@ -30,7 +30,9 @@ data class LunaDeskUiState(
     val models: List<ModelInfo> = emptyList(),
     val chatInput: String = "",
     val messages: List<ChatMessageUi> = emptyList(),
+    val connectionStatus: String? = null,
     val isLoadingModels: Boolean = false,
+    val isTestingConnection: Boolean = false,
     val isSwitchingModel: Boolean = false,
     val isSending: Boolean = false,
     val inlineMessage: String? = null
@@ -85,7 +87,45 @@ class LunaDeskViewModel(
             val state = uiState.value
             val settings = buildSettings(state) ?: return@launch showMessage("参数格式不正确")
             container.settingsRepository.saveSettings(settings)
+            _uiState.update { it.copy(connectionStatus = "配置已保存") }
             showMessage("配置已保存")
+        }
+    }
+
+    fun testConnection() {
+        val baseUrl = uiState.value.baseUrl.trim()
+        if (baseUrl.isBlank()) {
+            showMessage("请先填写服务地址")
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isTestingConnection = true,
+                    inlineMessage = null,
+                    connectionStatus = "正在测试连接"
+                )
+            }
+            runCatching {
+                container.lmStudioRepository.testConnection(baseUrl)
+            }.onSuccess {
+                _uiState.update {
+                    it.copy(
+                        isTestingConnection = false,
+                        connectionStatus = "连接成功，可访问模型服务"
+                    )
+                }
+                showMessage("连接测试成功")
+            }.onFailure { error ->
+                val message = readableError(error)
+                _uiState.update { state ->
+                    state.copy(
+                        isTestingConnection = false,
+                        connectionStatus = message
+                    )
+                }
+                showMessage(message)
+            }
         }
     }
 
@@ -104,6 +144,7 @@ class LunaDeskViewModel(
                     state.copy(
                         models = models,
                         isLoadingModels = false,
+                        connectionStatus = "连接正常，已获取 ${models.size} 个模型",
                         selectedModel = state.selectedModel.ifBlank {
                             models.firstOrNull()?.id.orEmpty()
                         }
@@ -113,7 +154,7 @@ class LunaDeskViewModel(
                 showMessage("模型列表已更新")
             }.onFailure {
                 _uiState.update { it.copy(isLoadingModels = false) }
-                showMessage(it.message ?: "获取模型列表失败")
+                showMessage(readableError(it))
             }
         }
     }
@@ -129,12 +170,18 @@ class LunaDeskViewModel(
             runCatching {
                 container.lmStudioRepository.loadModel(baseUrl, modelId)
             }.onSuccess {
-                _uiState.update { it.copy(selectedModel = modelId, isSwitchingModel = false) }
+                _uiState.update {
+                    it.copy(
+                        selectedModel = modelId,
+                        isSwitchingModel = false,
+                        connectionStatus = "当前模型：$modelId"
+                    )
+                }
                 persistCurrentSettings()
                 showMessage("已切换到 $modelId")
             }.onFailure {
                 _uiState.update { it.copy(isSwitchingModel = false) }
-                showMessage(it.message ?: "切换模型失败")
+                showMessage(readableError(it))
             }
         }
     }
@@ -175,6 +222,7 @@ class LunaDeskViewModel(
                 when {
                     chunk.delta.isNotBlank() -> appendAssistantDelta(assistantId, chunk.delta)
                     chunk.done -> finishAssistantMessage(assistantId)
+                    chunk.cancelled -> finishCancelledMessage(assistantId)
                     chunk.error != null -> markAssistantError(assistantId, chunk.error)
                 }
             }
@@ -188,7 +236,12 @@ class LunaDeskViewModel(
                 isSending = false,
                 inlineMessage = "已停止生成",
                 messages = state.messages.map { msg ->
-                    if (msg.isStreaming) msg.copy(isStreaming = false) else msg
+                    if (msg.isStreaming) {
+                        val content = msg.content.ifBlank { "已停止生成" }
+                        msg.copy(content = content, isStreaming = false)
+                    } else {
+                        msg
+                    }
                 }
             )
         }
@@ -243,8 +296,28 @@ class LunaDeskViewModel(
             state.copy(
                 isSending = false,
                 inlineMessage = null,
+                connectionStatus = "本轮对话已完成，当前共有 ${countCompletedMessages(state.messages)} 条消息",
                 messages = state.messages.map { msg ->
                     if (msg.id == assistantId) msg.copy(isStreaming = false) else msg
+                }
+            )
+        }
+    }
+
+    private fun finishCancelledMessage(assistantId: String) {
+        _uiState.update { state ->
+            state.copy(
+                isSending = false,
+                inlineMessage = "已停止生成",
+                messages = state.messages.map { msg ->
+                    if (msg.id == assistantId) {
+                        msg.copy(
+                            content = msg.content.ifBlank { "已停止生成" },
+                            isStreaming = false
+                        )
+                    } else {
+                        msg
+                    }
                 }
             )
         }
@@ -255,6 +328,7 @@ class LunaDeskViewModel(
             state.copy(
                 isSending = false,
                 inlineMessage = error,
+                connectionStatus = "请求失败，请检查服务状态",
                 messages = state.messages.map { msg ->
                     if (msg.id == assistantId) {
                         msg.copy(isStreaming = false, errorText = error)
@@ -276,5 +350,13 @@ class LunaDeskViewModel(
 
     private fun showMessage(message: String) {
         _uiState.update { it.copy(inlineMessage = message) }
+    }
+
+    private fun countCompletedMessages(messages: List<ChatMessageUi>): Int {
+        return messages.count { it.content.isNotBlank() }
+    }
+
+    private fun readableError(error: Throwable): String {
+        return error.message ?: "请求失败，请稍后重试"
     }
 }
