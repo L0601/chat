@@ -4,7 +4,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -19,6 +23,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.lunadesk.ui.screen.chat.ChatScreen
 import com.example.lunadesk.ui.screen.settings.SettingsScreen
@@ -75,7 +81,6 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                     state = state,
                     onBack = { viewModel.switchTab(AppTab.Chat) },
-                    onResetConversation = viewModel::resetConversation,
                     onBaseUrlChange = viewModel::updateBaseUrl,
                     onTemperatureChange = viewModel::updateTemperature,
                     onMaxTokensChange = viewModel::updateMaxTokens,
@@ -96,12 +101,32 @@ private fun DrawerContent(
     onReset: () -> Unit
 ) {
     Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 28.dp)) {
-        Text(text = "LunaDesk", color = Color(0xFF223732))
         Text(
-            text = state.selectedModel.ifBlank { "未选择模型" },
-            color = Color(0xFF6D7E79),
-            modifier = Modifier.padding(top = 6.dp, bottom = 18.dp)
+            text = "LunaDesk",
+            color = Color(0xFF223732),
+            fontWeight = FontWeight.SemiBold
         )
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp, bottom = 18.dp),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EEE3))
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                Text(
+                    text = "当前模型",
+                    color = Color(0xFF6D7E79)
+                )
+                Text(
+                    text = state.selectedModel.ifBlank { "未选择模型" },
+                    color = Color(0xFF223732),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
         NavigationDrawerItem(
             label = { Text("聊天") },
             selected = state.currentTab == AppTab.Chat,
@@ -126,7 +151,7 @@ private fun DrawerContent(
             selected = false,
             onClick = onReset,
             colors = NavigationDrawerItemDefaults.colors(
-                unselectedContainerColor = Color(0xFFF3E8D1)
+                unselectedContainerColor = Color(0xFFF6EFE0)
             ),
             modifier = Modifier.padding(top = 16.dp)
         )

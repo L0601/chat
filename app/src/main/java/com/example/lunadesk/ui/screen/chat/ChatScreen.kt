@@ -1,18 +1,27 @@
 package com.example.lunadesk.ui.screen.chat
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import android.widget.TextView
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,6 +29,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -29,16 +40,22 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.lunadesk.data.model.ChatMessageUi
 import com.example.lunadesk.ui.LunaDeskUiState
 import io.noties.markwon.Markwon
+import io.noties.markwon.ext.latex.JLatexMathPlugin
+import io.noties.markwon.inlineparser.MarkwonInlineParserPlugin
 
 @Composable
 fun ChatScreen(
@@ -61,7 +78,7 @@ fun ChatScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .safeDrawingPadding(),
+            .statusBarsPadding(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         ChatHeader(state = state, onOpenMenu = onOpenMenu)
@@ -81,9 +98,9 @@ fun ChatScreen(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                        .padding(horizontal = 14.dp, vertical = 14.dp),
                     state = listState,
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     items(state.messages, key = { it.id }) { message ->
                         MessageBubble(message = message)
@@ -110,7 +127,7 @@ private fun ChatHeader(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Button(
@@ -121,31 +138,46 @@ private fun ChatHeader(
             shape = RoundedCornerShape(18.dp),
             colors = ghostButtonColors()
         ) {
-            Text("≡", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = "⋯",
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold
+            )
         }
 
         Surface(
+            modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(18.dp),
             color = Color(0xF6FFFFFF)
         ) {
             Text(
-                text = state.connectionStatus ?: "准备开始新对话",
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                text = resolveHeaderTitle(state),
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                 color = Color(0xFF2E6DB8),
-                style = MaterialTheme.typography.labelLarge
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                textAlign = TextAlign.Center
             )
         }
 
-        Button(
-            onClick = {},
-            enabled = false,
+        Surface(
             modifier = Modifier
                 .width(54.dp)
                 .height(46.dp),
             shape = RoundedCornerShape(18.dp),
-            colors = ghostButtonColors()
+            color = Color(0xF6FFFFFF)
         ) {
-            Text("${state.messages.count { it.content.isNotBlank() }}")
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "${state.messages.count { it.content.isNotBlank() }}",
+                    color = Color(0xFF1E2A27),
+                    style = MaterialTheme.typography.labelLarge,
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
     }
 }
@@ -157,9 +189,23 @@ private fun ComposerBar(
     onSend: () -> Unit,
     onStop: () -> Unit
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val submitMessage: () -> Unit = {
+        if (state.isSending) {
+            onStop()
+        } else {
+            onSend()
+            focusManager.clearFocus(force = true)
+            keyboardController?.hide()
+        }
+        Unit
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
             .imePadding(),
         shape = RoundedCornerShape(24.dp),
         color = Color(0xF5FFFDF8),
@@ -172,18 +218,6 @@ private fun ComposerBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Button(
-                onClick = {},
-                enabled = false,
-                modifier = Modifier
-                    .width(44.dp)
-                    .height(44.dp),
-                shape = RoundedCornerShape(18.dp),
-                colors = ghostButtonColors()
-            ) {
-                Text("+")
-            }
-
             OutlinedTextField(
                 modifier = Modifier
                     .weight(1f)
@@ -192,29 +226,47 @@ private fun ComposerBar(
                 onValueChange = onInputChange,
                 minLines = 1,
                 maxLines = 4,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { submitMessage() }),
                 shape = RoundedCornerShape(18.dp),
-                placeholder = { Text("问问 LunaDesk") },
+                placeholder = {
+                    Text(
+                        text = "问问 LunaDesk",
+                        color = Color(0xFF8A938F)
+                    )
+                },
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color(0xFFF8FAFC),
                     unfocusedContainerColor = Color(0xFFF8FAFC),
+                    disabledContainerColor = Color(0xFFF1F3F5),
                     focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
+                    cursorColor = Color(0xFF223732)
                 )
             )
 
             Button(
-                onClick = if (state.isSending) onStop else onSend,
+                onClick = submitMessage,
                 enabled = state.isSending || state.chatInput.isNotBlank(),
                 modifier = Modifier
-                    .width(52.dp)
+                    .width(56.dp)
                     .height(44.dp),
                 shape = RoundedCornerShape(20.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (state.isSending) Color(0xFFB55D48) else Color(0xFF111111),
-                    contentColor = Color.White
+                    contentColor = Color.White,
+                    disabledContainerColor = Color(0xFFD5D8DB),
+                    disabledContentColor = Color(0xFF7E868A)
                 )
             ) {
-                Text(if (state.isSending) "停" else "发")
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = if (state.isSending) "停" else "发",
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }
@@ -242,7 +294,8 @@ private fun EmptyState() {
 @Composable
 private fun MessageBubble(message: ChatMessageUi) {
     val isUser = message.role == "user"
-    val background = if (isUser) Color(0xFFDCECF6) else Color(0xFFF6EBCF)
+    val background = if (isUser) Color(0xFFD8E9F4) else Color(0xFFF8EFD6)
+    val context = LocalContext.current
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -253,15 +306,35 @@ private fun MessageBubble(message: ChatMessageUi) {
             color = background,
             tonalElevation = 0.dp,
             modifier = Modifier
-                .fillMaxWidth(0.94f)
+                .fillMaxWidth(if (isUser) 0.9f else 0.96f)
                 .heightIn(min = 48.dp)
         ) {
-            Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isUser) "你" else "Luna",
+                            color = if (isUser) Color(0xFF35546B) else Color(0xFF6A5632),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (message.content.isNotBlank()) {
+                            CopyBubbleButton(
+                                onClick = {
+                                    copyMessage(context, message.content)
+                                }
+                            )
+                        }
+                    }
                     MarkdownText(
                         markdown = message.content.ifBlank {
                             if (message.isStreaming) "正在生成..." else "暂无内容"
-                        }
+                        },
+                        isUser = isUser
                     )
                     message.errorText?.let {
                         Text(text = it, color = MaterialTheme.colorScheme.error)
@@ -273,24 +346,59 @@ private fun MessageBubble(message: ChatMessageUi) {
 }
 
 @Composable
-private fun MarkdownText(markdown: String) {
+private fun MarkdownText(markdown: String, isUser: Boolean) {
     val context = LocalContext.current
-    val markwon = remember(context) { Markwon.create(context) }
+    val markwon = remember(context) {
+        Markwon.builder(context)
+            .usePlugin(MarkwonInlineParserPlugin.create())
+            .usePlugin(JLatexMathPlugin.create(44f) { builder ->
+                builder.inlinesEnabled(true)
+            })
+            .build()
+    }
+    val textColor = if (isUser) "#203847" else "#3A3224"
 
     AndroidView(
         factory = { ctx ->
             TextView(ctx).apply {
-                setTextColor(android.graphics.Color.parseColor("#21302D"))
-                textSize = 15f
-                setLineSpacing(0f, 1.2f)
+                setTextColor(android.graphics.Color.parseColor(textColor))
+                textSize = 16f
+                setLineSpacing(0f, 1.4f)
                 includeFontPadding = false
             }
         },
         update = { textView ->
-            markwon.setMarkdown(textView, markdown)
+            markwon.setMarkdown(textView, normalizeMarkdown(markdown))
         },
         modifier = Modifier.fillMaxWidth()
     )
+}
+
+@Composable
+private fun CopyBubbleButton(onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .size(28.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        color = Color(0xF4FFFFFF),
+        tonalElevation = 0.dp
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .offset(x = 2.dp, y = (-2).dp)
+                    .border(1.2.dp, Color(0xFF42504B), RoundedCornerShape(2.dp))
+            )
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .offset(x = (-2).dp, y = 2.dp)
+                    .border(1.2.dp, Color(0xFF42504B), RoundedCornerShape(2.dp))
+            )
+        }
+    }
 }
 
 @Composable
@@ -299,11 +407,16 @@ private fun InlineNotice(message: String, onDismiss: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .background(Color(0xFFFCECC8), RoundedCornerShape(14.dp))
-            .padding(horizontal = 10.dp, vertical = 7.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(message, modifier = Modifier.weight(1f))
+        Text(
+            message,
+            modifier = Modifier.weight(1f),
+            color = Color(0xFF5B4C1F),
+            style = MaterialTheme.typography.bodyMedium
+        )
         TextButton(onClick = onDismiss) {
             Text("关闭")
         }
@@ -317,3 +430,41 @@ private fun ghostButtonColors() = ButtonDefaults.buttonColors(
     disabledContainerColor = Color(0xE8FFFFFF),
     disabledContentColor = Color(0xFF1E2A27)
 )
+
+private fun normalizeMarkdown(markdown: String): String {
+    val normalizedLayout = markdown
+        .replace(Regex("(?m)(?<!\\n)(#{1,6}\\s+)"), "\n\n$1")
+        .replace(Regex("(?m)(?<!\\n)(---+)"), "\n\n$1")
+        .replace(Regex("(?m)(?<!\\n)([-*]\\s+)"), "\n$1")
+        .replace(Regex("(?m)(?<!\\n)(\\d+\\.\\s+)"), "\n$1")
+        .replace(Regex("(?m)```"), "\n```")
+        .replace(Regex("(?m)^>(.+)$"), "\n> $1")
+        .replace(Regex("\\n{3,}"), "\n\n")
+
+    return INLINE_MATH_REGEX.replace(normalizedLayout) { match ->
+        val value = match.groupValues[1].trim()
+        if (value.isEmpty()) {
+            match.value
+        } else {
+            "$$$$${value}$$$$"
+        }
+    }
+}
+
+private fun copyMessage(context: Context, content: String) {
+    if (content.isBlank()) return
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("chat_message", content))
+    Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+}
+
+private val INLINE_MATH_REGEX = Regex("(?<!\\\\)\\$([^$\\n]+?)(?<!\\\\)\\$")
+
+private fun resolveHeaderTitle(state: LunaDeskUiState): String {
+    return when {
+        state.isSending -> "生成中"
+        state.selectedModel.isNotBlank() -> state.selectedModel
+        state.connectionStatus?.isNotBlank() == true -> state.connectionStatus
+        else -> "准备开始新对话"
+    }
+}

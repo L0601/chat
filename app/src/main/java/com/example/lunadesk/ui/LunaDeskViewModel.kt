@@ -158,42 +158,19 @@ class LunaDeskViewModel(
     }
 
     fun switchModel(modelId: String) {
-        val baseUrl = uiState.value.baseUrl.trim()
-        if (baseUrl.isBlank()) {
-            showMessage("请先填写服务地址")
+        val state = uiState.value
+        if (state.selectedModel == modelId) {
             return
         }
-        viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    isSwitchingModel = true,
-                    switchingModelId = modelId,
-                    inlineMessage = null
-                )
-            }
-            runCatching {
-                container.lmStudioRepository.loadModel(baseUrl, modelId)
-            }.onSuccess {
-                _uiState.update {
-                    it.copy(
-                        selectedModel = modelId,
-                        isSwitchingModel = false,
-                        switchingModelId = null,
-                        connectionStatus = "当前模型：$modelId"
-                    )
-                }
-                persistCurrentSettings()
-                showMessage("已切换到 $modelId")
-            }.onFailure {
-                _uiState.update {
-                    it.copy(
-                        isSwitchingModel = false,
-                        switchingModelId = null
-                    )
-                }
-                showMessage(readableError(it))
-            }
+
+        _uiState.update {
+            it.copy(
+                selectedModel = modelId,
+                inlineMessage = "已选择 $modelId",
+                connectionStatus = "当前模型：$modelId"
+            )
         }
+        persistCurrentSettings()
     }
 
     fun sendMessage() {
