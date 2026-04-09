@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,6 +25,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -39,11 +42,12 @@ import io.noties.markwon.Markwon
 
 @Composable
 fun ChatScreen(
+    modifier: Modifier = Modifier,
     state: LunaDeskUiState,
+    onOpenMenu: () -> Unit,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
-    onReset: () -> Unit,
     onDismissMessage: () -> Unit
 ) {
     val listState = rememberLazyListState()
@@ -55,10 +59,12 @@ fun ChatScreen(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .safeDrawingPadding(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        ChatHeader(state = state)
+        ChatHeader(state = state, onOpenMenu = onOpenMenu)
 
         state.inlineMessage?.let {
             InlineNotice(message = it, onDismiss = onDismissMessage)
@@ -66,8 +72,8 @@ fun ChatScreen(
 
         Surface(
             modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(24.dp),
-            color = Color(0xF9FFFDF8)
+            shape = RoundedCornerShape(30.dp),
+            color = Color(0xF7FFFDF9)
         ) {
             if (state.messages.isEmpty()) {
                 EmptyState()
@@ -75,9 +81,9 @@ fun ChatScreen(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 10.dp, vertical = 10.dp),
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
                     state = listState,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(state.messages, key = { it.id }) { message ->
                         MessageBubble(message = message)
@@ -90,39 +96,57 @@ fun ChatScreen(
             state = state,
             onInputChange = onInputChange,
             onSend = onSend,
-            onStop = onStop,
-            onReset = onReset
+            onStop = onStop
         )
     }
 }
 
 @Composable
-private fun ChatHeader(state: LunaDeskUiState) {
+private fun ChatHeader(
+    state: LunaDeskUiState,
+    onOpenMenu: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xD92A4B45), RoundedCornerShape(18.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(top = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = state.selectedModel.ifBlank { "未选择模型" },
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium
-            )
+        Button(
+            onClick = onOpenMenu,
+            modifier = Modifier
+                .width(54.dp)
+                .height(46.dp),
+            shape = RoundedCornerShape(18.dp),
+            colors = ghostButtonColors()
+        ) {
+            Text("≡", style = MaterialTheme.typography.titleMedium)
+        }
+
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = Color(0xF6FFFFFF)
+        ) {
             Text(
                 text = state.connectionStatus ?: "准备开始新对话",
-                color = Color(0xFFE4F2EE),
-                style = MaterialTheme.typography.bodySmall
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                color = Color(0xFF2E6DB8),
+                style = MaterialTheme.typography.labelLarge
             )
         }
-        Text(
-            text = "${state.messages.count { it.content.isNotBlank() }} 条",
-            color = Color.White,
-            style = MaterialTheme.typography.labelLarge
-        )
+
+        Button(
+            onClick = {},
+            enabled = false,
+            modifier = Modifier
+                .width(54.dp)
+                .height(46.dp),
+            shape = RoundedCornerShape(18.dp),
+            colors = ghostButtonColors()
+        ) {
+            Text("${state.messages.count { it.content.isNotBlank() }}")
+        }
     }
 }
 
@@ -131,60 +155,66 @@ private fun ComposerBar(
     state: LunaDeskUiState,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
-    onStop: () -> Unit,
-    onReset: () -> Unit
+    onStop: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(22.dp),
-        color = Color(0xFFF9F6EC),
+        modifier = Modifier
+            .fillMaxWidth()
+            .imePadding(),
+        shape = RoundedCornerShape(24.dp),
+        color = Color(0xF5FFFDF8),
         shadowElevation = 6.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 10.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Button(
-                onClick = onReset,
-                enabled = state.messages.isNotEmpty() || state.chatInput.isNotBlank(),
+                onClick = {},
+                enabled = false,
                 modifier = Modifier
-                    .width(68.dp)
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFE8D8A9),
-                    contentColor = Color(0xFF2A4B45)
-                )
+                    .width(44.dp)
+                    .height(44.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = ghostButtonColors()
             ) {
-                Text("重置")
+                Text("+")
             }
 
             OutlinedTextField(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 52.dp),
                 value = state.chatInput,
                 onValueChange = onInputChange,
                 minLines = 1,
-                maxLines = 6,
-                shape = RoundedCornerShape(16.dp),
-                label = { Text("输入消息") },
-                placeholder = { Text("输入问题后直接发送") }
+                maxLines = 4,
+                shape = RoundedCornerShape(18.dp),
+                placeholder = { Text("问问 LunaDesk") },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFFF8FAFC),
+                    unfocusedContainerColor = Color(0xFFF8FAFC),
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                )
             )
 
             Button(
                 onClick = if (state.isSending) onStop else onSend,
                 enabled = state.isSending || state.chatInput.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (state.isSending) Color(0xFFB55D48) else Color(0xFF2A4B45),
-                    contentColor = Color.White
-                ),
                 modifier = Modifier
-                    .width(72.dp)
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp)
+                    .width(52.dp)
+                    .height(44.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (state.isSending) Color(0xFFB55D48) else Color(0xFF111111),
+                    contentColor = Color.White
+                )
             ) {
-                Text(if (state.isSending) "停止" else "发送")
+                Text(if (state.isSending) "停" else "发")
             }
         }
     }
@@ -195,15 +225,16 @@ private fun EmptyState() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp),
+            .padding(horizontal = 24.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("LunaDesk", style = MaterialTheme.typography.headlineMedium)
+        Text("有什么可以帮忙的？", style = MaterialTheme.typography.headlineMedium)
         Text(
-            text = "先在设置页连接局域网模型服务，然后在这里开始对话。",
+            text = "左上角打开侧边栏进入设置，连接局域网模型服务后即可开始对话。",
             textAlign = TextAlign.Center,
-            color = Color(0xFF50625C)
+            color = Color(0xFF50625C),
+            modifier = Modifier.padding(top = 10.dp)
         )
     }
 }
@@ -218,7 +249,7 @@ private fun MessageBubble(message: ChatMessageUi) {
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
     ) {
         Surface(
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(22.dp),
             color = background,
             tonalElevation = 0.dp,
             modifier = Modifier
@@ -278,3 +309,11 @@ private fun InlineNotice(message: String, onDismiss: () -> Unit) {
         }
     }
 }
+
+@Composable
+private fun ghostButtonColors() = ButtonDefaults.buttonColors(
+    containerColor = Color(0xF6FFFFFF),
+    contentColor = Color(0xFF1E2A27),
+    disabledContainerColor = Color(0xE8FFFFFF),
+    disabledContentColor = Color(0xFF1E2A27)
+)

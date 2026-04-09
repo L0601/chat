@@ -8,10 +8,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
@@ -19,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
@@ -28,7 +31,10 @@ import com.example.lunadesk.ui.LunaDeskUiState
 
 @Composable
 fun SettingsScreen(
+    modifier: Modifier = Modifier,
     state: LunaDeskUiState,
+    onBack: () -> Unit,
+    onResetConversation: () -> Unit,
     onBaseUrlChange: (String) -> Unit,
     onTemperatureChange: (String) -> Unit,
     onMaxTokensChange: (String) -> Unit,
@@ -38,10 +44,16 @@ fun SettingsScreen(
     onSwitchModel: (String) -> Unit
 ) {
     Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        modifier = modifier
+            .fillMaxSize()
+            .safeDrawingPadding(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Header()
+        Header(onBack = onBack)
+        ActionCard(
+            hasMessages = state.messages.isNotEmpty() || state.chatInput.isNotBlank(),
+            onResetConversation = onResetConversation
+        )
         ConfigCard(
             state = state,
             onBaseUrlChange = onBaseUrlChange,
@@ -60,19 +72,54 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun Header() {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFD7E5D5))
+private fun Header(onBack: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
+        Button(
+            onClick = onBack,
+            shape = RoundedCornerShape(18.dp),
+            colors = lightButtonColors()
+        ) {
+            Text("<")
+        }
+        Text("设置", style = MaterialTheme.typography.titleLarge, color = Color(0xFF223732))
+        Button(
+            onClick = {},
+            enabled = false,
+            shape = RoundedCornerShape(18.dp),
+            colors = lightButtonColors()
+        ) {
+            Text(" ")
+        }
+    }
+}
+
+@Composable
+private fun ActionCard(
+    hasMessages: Boolean,
+    onResetConversation: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFDFBF7))
+    ) {
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+                .padding(horizontal = 12.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("LunaDesk 设置", style = MaterialTheme.typography.titleMedium)
-            Text("拉取模型后直接点选目标模型。", style = MaterialTheme.typography.bodySmall)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("当前会话", style = MaterialTheme.typography.titleMedium)
+                Text("清空聊天记录与输入框内容。", style = MaterialTheme.typography.bodySmall)
+            }
+            Button(onClick = onResetConversation, enabled = hasMessages) {
+                Text("重置上下文")
+            }
         }
     }
 }
@@ -222,7 +269,7 @@ private fun ModelRow(
                 .height(48.dp)
                 .padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = model.id,
@@ -243,3 +290,11 @@ private fun ModelRow(
         }
     }
 }
+
+@Composable
+private fun lightButtonColors() = ButtonDefaults.buttonColors(
+    containerColor = Color(0xF6FFFFFF),
+    contentColor = Color(0xFF1E2A27),
+    disabledContainerColor = Color(0xE8FFFFFF),
+    disabledContentColor = Color(0xFF1E2A27)
+)
