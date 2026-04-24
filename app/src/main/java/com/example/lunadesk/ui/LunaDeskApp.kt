@@ -3,6 +3,7 @@ package com.example.lunadesk.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -40,7 +41,7 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
-                modifier = Modifier.fillMaxSize(0.82f),
+                modifier = Modifier.fillMaxHeight().fillMaxWidth(0.82f),
                 drawerContainerColor = Color(0xFFF8F5EC)
             ) {
                 DrawerContent(

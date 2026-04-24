@@ -171,9 +171,7 @@ private fun ChatHeader(
         }
 
         Surface(
-            modifier = Modifier
-                .width(54.dp)
-                .height(46.dp),
+            modifier = Modifier.size(44.dp),
             shape = RoundedCornerShape(18.dp),
             color = Color(0xF6FFFFFF)
         ) {

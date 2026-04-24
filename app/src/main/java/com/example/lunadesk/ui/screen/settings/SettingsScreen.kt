@@ -3,15 +3,14 @@ package com.example.lunadesk.ui.screen.settings
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -82,20 +81,20 @@ fun SettingsScreen(
 
 @Composable
 private fun Header(onBack: () -> Unit) {
-    Row(
+    Box(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        contentAlignment = Alignment.Center
     ) {
-        Button(
-            onClick = onBack,
-            shape = RoundedCornerShape(18.dp),
-            colors = lightButtonColors()
-        ) {
-            Text("返")
-        }
         Text("设置", style = MaterialTheme.typography.titleLarge, color = Color(0xFF223732))
-        Spacer(modifier = Modifier.width(64.dp))
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = onBack,
+                shape = RoundedCornerShape(18.dp),
+                colors = lightButtonColors()
+            ) {
+                Text("返")
+            }
+        }
     }
 }
 
@@ -209,7 +208,7 @@ private fun ModelListCard(
                 Text("暂未获取到模型，请先点击“拉取”。")
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxWidth().weight(1f),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(state.models, key = { it.id }) { model ->
