@@ -69,7 +69,8 @@ fun ChatScreen(
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
-    onDismissMessage: () -> Unit
+    onDismissMessage: () -> Unit,
+    onReset: () -> Unit = {}
 ) {
     val listState = rememberLazyListState()
 
@@ -86,7 +87,7 @@ fun ChatScreen(
             .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime)),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        ChatHeader(state = state, onOpenMenu = onOpenMenu)
+        ChatHeader(state = state, onOpenMenu = onOpenMenu, onReset = onReset)
 
         state.inlineMessage?.let {
             InlineNotice(message = it, onDismiss = onDismissMessage)
@@ -126,7 +127,8 @@ fun ChatScreen(
 @Composable
 private fun ChatHeader(
     state: LunaDeskUiState,
-    onOpenMenu: () -> Unit
+    onOpenMenu: () -> Unit,
+    onReset: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -172,20 +174,19 @@ private fun ChatHeader(
             )
         }
 
-        Surface(
-            modifier = Modifier.size(44.dp),
-            shape = RoundedCornerShape(18.dp),
-            color = Color(0xF6FFFFFF)
+        Button(
+            onClick = onReset,
+            modifier = Modifier.height(44.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = ghostButtonColors(),
+            contentPadding = PaddingValues(horizontal = 12.dp)
         ) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = "${state.messages.count { it.content.isNotBlank() }}",
-                    color = Color(0xFF1E2A27),
-                    style = MaterialTheme.typography.labelLarge,
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            Text(
+                text = "重置",
+                color = Color(0xFF1E2A27),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }

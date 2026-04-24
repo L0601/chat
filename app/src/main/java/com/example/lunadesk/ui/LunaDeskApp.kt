@@ -49,10 +49,6 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
                     onNavigate = { tab ->
                         viewModel.switchTab(tab)
                         scope.launch { drawerState.close() }
-                    },
-                    onReset = {
-                        viewModel.resetConversation()
-                        scope.launch { drawerState.close() }
                     }
                 )
             }
@@ -75,7 +71,8 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
                     onInputChange = viewModel::updateChatInput,
                     onSend = viewModel::sendMessage,
                     onStop = viewModel::stopStreaming,
-                    onDismissMessage = viewModel::clearInlineMessage
+                    onDismissMessage = viewModel::clearInlineMessage,
+                    onReset = viewModel::resetConversation
                 )
 
                 AppTab.Settings -> SettingsScreen(
@@ -100,8 +97,7 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
 @Composable
 private fun DrawerContent(
     state: LunaDeskUiState,
-    onNavigate: (AppTab) -> Unit,
-    onReset: () -> Unit
+    onNavigate: (AppTab) -> Unit
 ) {
     Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 28.dp)) {
         Text(
@@ -148,15 +144,6 @@ private fun DrawerContent(
                 unselectedContainerColor = Color.Transparent
             ),
             modifier = Modifier.padding(top = 8.dp)
-        )
-        NavigationDrawerItem(
-            label = { Text("重置当前聊天") },
-            selected = false,
-            onClick = onReset,
-            colors = NavigationDrawerItemDefaults.colors(
-                unselectedContainerColor = Color.Transparent
-            ),
-            modifier = Modifier.padding(top = 16.dp)
         )
     }
 }
