@@ -147,12 +147,13 @@ class LunaDeskViewModel(
             runCatching {
                 container.lmStudioRepository.fetchModels(baseUrl, uiState.value.apiKey)
             }.onSuccess { models ->
+                val uniqueModels = models.distinctBy { it.id }
                 _uiState.update { state ->
                     state.copy(
-                        models = models,
+                        models = uniqueModels,
                         isLoadingModels = false,
-                        connectionStatus = "连接正常，已获取 ${models.size} 个模型",
-                        selectedModel = resolveSelectedModel(state.selectedModel, models)
+                        connectionStatus = "连接正常，已获取 ${uniqueModels.size} 个模型",
+                        selectedModel = resolveSelectedModel(state.selectedModel, uniqueModels)
                     )
                 }
                 persistCurrentSettings()
