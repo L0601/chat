@@ -52,6 +52,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -93,9 +94,22 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val lastMessage = state.messages.lastOrNull()
 
+    val isNearBottom by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val lastVisible = info.visibleItemsInfo.lastOrNull()
+            lastVisible == null || lastVisible.index >= info.totalItemsCount - 2
+        }
+    }
+
     LaunchedEffect(state.messages.size, lastMessage?.content?.length, lastMessage?.isStreaming) {
-        if (state.messages.isNotEmpty()) {
-            listState.animateScrollToItem(state.messages.lastIndex)
+        if (state.messages.isEmpty() || listState.isScrollInProgress) return@LaunchedEffect
+        if (isNearBottom) {
+            if (lastMessage?.isStreaming == true) {
+                listState.scrollToItem(state.messages.lastIndex)
+            } else {
+                listState.animateScrollToItem(state.messages.lastIndex)
+            }
         }
     }
 
