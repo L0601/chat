@@ -6,11 +6,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -89,10 +94,16 @@ private fun Header(onBack: () -> Unit) {
         Row(modifier = Modifier.fillMaxWidth()) {
             Button(
                 onClick = onBack,
-                shape = RoundedCornerShape(18.dp),
-                colors = lightButtonColors()
+                modifier = Modifier.size(44.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = lightButtonColors(),
+                contentPadding = PaddingValues(0.dp)
             ) {
-                Text("返")
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "返回",
+                    modifier = Modifier.size(22.dp)
+                )
             }
         }
     }
