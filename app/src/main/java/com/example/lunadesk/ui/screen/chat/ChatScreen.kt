@@ -79,7 +79,9 @@ fun ChatScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .statusBarsPadding(),
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .imePadding(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         ChatHeader(state = state, onOpenMenu = onOpenMenu)
@@ -209,10 +211,7 @@ private fun ComposerBar(
     }
 
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .imePadding(),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         color = Color(0xF5FFFDF8),
         shadowElevation = 6.dp
