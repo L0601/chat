@@ -15,8 +15,8 @@ private val Context.dataStore by preferencesDataStore(name = "lunadesk_settings"
 data class UserSettings(
     val baseUrl: String = "",
     val selectedModel: String = "",
-    val temperature: Float = 0.7f,
-    val maxTokens: Int = 2048,
+    val temperature: Float = 0.3f,
+    val maxTokens: Int = 20000,
     val apiKey: String = ""
 )
 
@@ -47,8 +47,8 @@ class SettingsRepository(private val context: Context) {
         return UserSettings(
             baseUrl = prefs[Keys.baseUrl].orEmpty(),
             selectedModel = prefs[Keys.selectedModel].orEmpty(),
-            temperature = prefs[Keys.temperature] ?: 0.7f,
-            maxTokens = prefs[Keys.maxTokens] ?: 2048,
+            temperature = prefs[Keys.temperature] ?: 0.3f,
+            maxTokens = prefs[Keys.maxTokens] ?: 20000,
             apiKey = prefs[Keys.apiKey].orEmpty()
         )
     }
