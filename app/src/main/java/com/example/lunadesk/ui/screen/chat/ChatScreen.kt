@@ -11,6 +11,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -132,19 +133,24 @@ private fun ChatHeader(
     ) {
         Button(
             onClick = onOpenMenu,
-            modifier = Modifier
-                .width(54.dp)
-                .height(46.dp),
-            shape = RoundedCornerShape(18.dp),
-            colors = ghostButtonColors()
+            modifier = Modifier.size(44.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = ghostButtonColors(),
+            contentPadding = PaddingValues(0.dp)
         ) {
-            Text(
-                text = "⋯",
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold
-            )
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                repeat(3) {
+                    Box(
+                        modifier = Modifier
+                            .width(16.dp)
+                            .height(2.dp)
+                            .background(Color(0xFF1E2A27), RoundedCornerShape(1.dp))
+                    )
+                }
+            }
         }
 
         Surface(
