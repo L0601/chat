@@ -11,7 +11,6 @@ import com.example.lunadesk.data.model.ModelInfo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -33,8 +32,6 @@ data class LunaDeskUiState(
     val connectionStatus: String? = null,
     val isLoadingModels: Boolean = false,
     val isTestingConnection: Boolean = false,
-    val isSwitchingModel: Boolean = false,
-    val switchingModelId: String? = null,
     val isSending: Boolean = false,
     val inlineMessage: String? = null,
     val apiKey: String = "",
