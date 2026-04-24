@@ -20,8 +20,8 @@ val generatedVersionCode = providers.environmentVariable("LUNADESK_VERSION_CODE"
     ?.toIntOrNull()
     ?: LocalDateTime.now().let { now ->
         val year = now.year - 2020
-        val tail = now.format(DateTimeFormatter.ofPattern("MMddHHmm")).toInt()
-        year * 100_000_000 + tail
+        val tail = now.format(DateTimeFormatter.ofPattern("MMdd")).toInt()
+        year * 10_000 + tail
     }
 
 android {
