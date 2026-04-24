@@ -89,7 +89,8 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
                     onSave = viewModel::saveSettings,
                     onTestConnection = viewModel::testConnection,
                     onRefreshModels = viewModel::refreshModels,
-                    onSwitchModel = viewModel::switchModel
+                    onSwitchModel = viewModel::switchModel,
+                    onModelSearchChange = viewModel::updateModelSearch
                 )
             }
         }

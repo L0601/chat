@@ -37,7 +37,8 @@ data class LunaDeskUiState(
     val switchingModelId: String? = null,
     val isSending: Boolean = false,
     val inlineMessage: String? = null,
-    val apiKey: String = ""
+    val apiKey: String = "",
+    val modelSearchQuery: String = ""
 )
 
 class LunaDeskViewModel(
@@ -83,6 +84,10 @@ class LunaDeskViewModel(
 
     fun updateApiKey(value: String) {
         _uiState.update { it.copy(apiKey = value) }
+    }
+
+    fun updateModelSearch(query: String) {
+        _uiState.update { it.copy(modelSearchQuery = query) }
     }
 
     fun clearInlineMessage() {

@@ -49,7 +49,8 @@ fun SettingsScreen(
     onSave: () -> Unit,
     onTestConnection: () -> Unit,
     onRefreshModels: () -> Unit,
-    onSwitchModel: (String) -> Unit
+    onSwitchModel: (String) -> Unit,
+    onModelSearchChange: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -79,7 +80,8 @@ fun SettingsScreen(
         ModelListCard(
             modifier = Modifier.weight(1f),
             state = state,
-            onSwitchModel = onSwitchModel
+            onSwitchModel = onSwitchModel,
+            onModelSearchChange = onModelSearchChange
         )
     }
 }
@@ -184,7 +186,7 @@ private fun ConfigCard(
                     enabled = !state.isLoadingModels,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(if (state.isLoadingModels) "拉取中" else "拉取")
+                    Text(if (state.isLoadingModels) "获取中" else "选择模型")
                 }
             }
         }
@@ -195,8 +197,15 @@ private fun ConfigCard(
 private fun ModelListCard(
     modifier: Modifier = Modifier,
     state: LunaDeskUiState,
-    onSwitchModel: (String) -> Unit
+    onSwitchModel: (String) -> Unit,
+    onModelSearchChange: (String) -> Unit
 ) {
+    val filteredModels = if (state.modelSearchQuery.isBlank()) {
+        state.models
+    } else {
+        state.models.filter { it.id.contains(state.modelSearchQuery, ignoreCase = true) }
+    }
+
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -212,17 +221,29 @@ private fun ModelListCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("模型列表", style = MaterialTheme.typography.titleMedium)
-                Text("${state.models.size} 个", style = MaterialTheme.typography.bodySmall)
+                Text(“模型列表”, style = MaterialTheme.typography.titleMedium)
+                Text(“${filteredModels.size} 个”, style = MaterialTheme.typography.bodySmall)
+            }
+            if (state.models.isNotEmpty()) {
+                OutlinedTextField(
+                    value = state.modelSearchQuery,
+                    onValueChange = onModelSearchChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    placeholder = { Text(“搜索模型”) }
+                )
             }
             if (state.models.isEmpty()) {
-                Text("暂未获取到模型，请先点击“拉取”。")
+                Text(“暂未获取到模型，请先点击”选择模型”。”)
+            } else if (filteredModels.isEmpty()) {
+                Text(“未找到匹配的模型”)
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth().weight(1f),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    items(state.models, key = { it.id }) { model ->
+                    items(filteredModels, key = { it.id }) { model ->
                         ModelRow(
                             model = model,
                             selected = model.id == state.selectedModel,
