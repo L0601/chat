@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -95,22 +96,26 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val lastMessage = state.messages.lastOrNull()
 
-    val isNearBottom by remember {
+    val isAtBottom by remember {
         derivedStateOf {
             val info = listState.layoutInfo
-            val lastVisible = info.visibleItemsInfo.lastOrNull()
-            lastVisible == null || lastVisible.index >= info.totalItemsCount - 2
+            if (info.totalItemsCount == 0) return@derivedStateOf true
+            val lastVisible = info.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf true
+            // 锚点 item 可见 → 一定在底部
+            if (lastVisible.index >= info.totalItemsCount - 1) return@derivedStateOf true
+            // 最后一条消息可见且底部接近视口底部（100px 容差）
+            lastVisible.index >= info.totalItemsCount - 2 &&
+                lastVisible.offset + lastVisible.size <= info.viewportEndOffset + 100
         }
     }
 
     LaunchedEffect(state.messages.size, lastMessage?.content?.length, lastMessage?.isStreaming) {
-        if (state.messages.isEmpty() || listState.isScrollInProgress) return@LaunchedEffect
-        if (isNearBottom) {
-            if (lastMessage?.isStreaming == true) {
-                listState.scrollToItem(state.messages.lastIndex)
-            } else {
-                listState.animateScrollToItem(state.messages.lastIndex)
-            }
+        if (state.messages.isEmpty() || listState.isScrollInProgress || !isAtBottom) return@LaunchedEffect
+        val anchorIndex = state.messages.size // 锚点在消息列表之后
+        if (lastMessage?.isStreaming == true) {
+            listState.scrollToItem(anchorIndex)
+        } else {
+            listState.animateScrollToItem(anchorIndex)
         }
     }
 
@@ -144,6 +149,9 @@ fun ChatScreen(
                 ) {
                     items(state.messages, key = { it.id }) { message ->
                         MessageBubble(message = message)
+                    }
+                    item(key = "_bottom_anchor") {
+                        Spacer(Modifier.height(1.dp))
                     }
                 }
             }
