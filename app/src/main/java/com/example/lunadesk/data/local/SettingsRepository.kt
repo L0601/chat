@@ -16,7 +16,8 @@ data class UserSettings(
     val baseUrl: String = "",
     val selectedModel: String = "",
     val temperature: Float = 0.7f,
-    val maxTokens: Int = 2048
+    val maxTokens: Int = 2048,
+    val apiKey: String = ""
 )
 
 class SettingsRepository(private val context: Context) {
@@ -25,6 +26,7 @@ class SettingsRepository(private val context: Context) {
         val selectedModel = stringPreferencesKey("selected_model")
         val temperature = floatPreferencesKey("temperature")
         val maxTokens = intPreferencesKey("max_tokens")
+        val apiKey = stringPreferencesKey("api_key")
     }
 
     suspend fun getSettings(): UserSettings {
@@ -37,6 +39,7 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.selectedModel] = settings.selectedModel
             prefs[Keys.temperature] = settings.temperature
             prefs[Keys.maxTokens] = settings.maxTokens
+            prefs[Keys.apiKey] = settings.apiKey
         }
     }
 
@@ -45,7 +48,8 @@ class SettingsRepository(private val context: Context) {
             baseUrl = prefs[Keys.baseUrl].orEmpty(),
             selectedModel = prefs[Keys.selectedModel].orEmpty(),
             temperature = prefs[Keys.temperature] ?: 0.7f,
-            maxTokens = prefs[Keys.maxTokens] ?: 2048
+            maxTokens = prefs[Keys.maxTokens] ?: 2048,
+            apiKey = prefs[Keys.apiKey].orEmpty()
         )
     }
 }

@@ -39,6 +39,7 @@ fun SettingsScreen(
     state: LunaDeskUiState,
     onBack: () -> Unit,
     onBaseUrlChange: (String) -> Unit,
+    onApiKeyChange: (String) -> Unit,
     onTemperatureChange: (String) -> Unit,
     onMaxTokensChange: (String) -> Unit,
     onSave: () -> Unit,
@@ -64,6 +65,7 @@ fun SettingsScreen(
         ConfigCard(
             state = state,
             onBaseUrlChange = onBaseUrlChange,
+            onApiKeyChange = onApiKeyChange,
             onTemperatureChange = onTemperatureChange,
             onMaxTokensChange = onMaxTokensChange,
             onSave = onSave,
@@ -101,6 +103,7 @@ private fun Header(onBack: () -> Unit) {
 private fun ConfigCard(
     state: LunaDeskUiState,
     onBaseUrlChange: (String) -> Unit,
+    onApiKeyChange: (String) -> Unit,
     onTemperatureChange: (String) -> Unit,
     onMaxTokensChange: (String) -> Unit,
     onSave: () -> Unit,
@@ -124,6 +127,14 @@ private fun ConfigCard(
                 singleLine = true,
                 label = { Text("LM Studio 地址") },
                 placeholder = { Text("http://192.168.31.30:1234") }
+            )
+            OutlinedTextField(
+                value = state.apiKey,
+                onValueChange = onApiKeyChange,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("API Key（可选）") },
+                placeholder = { Text("sk-...") }
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),

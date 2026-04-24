@@ -36,7 +36,8 @@ data class LunaDeskUiState(
     val isSwitchingModel: Boolean = false,
     val switchingModelId: String? = null,
     val isSending: Boolean = false,
-    val inlineMessage: String? = null
+    val inlineMessage: String? = null,
+    val apiKey: String = ""
 )
 
 class LunaDeskViewModel(
@@ -53,7 +54,8 @@ class LunaDeskViewModel(
                     baseUrl = settings.baseUrl,
                     selectedModel = settings.selectedModel,
                     temperatureInput = settings.temperature.toString(),
-                    maxTokensInput = settings.maxTokens.toString()
+                    maxTokensInput = settings.maxTokens.toString(),
+                    apiKey = settings.apiKey
                 )
             }
         }
@@ -77,6 +79,10 @@ class LunaDeskViewModel(
 
     fun updateChatInput(value: String) {
         _uiState.update { it.copy(chatInput = value) }
+    }
+
+    fun updateApiKey(value: String) {
+        _uiState.update { it.copy(apiKey = value) }
     }
 
     fun clearInlineMessage() {
@@ -108,7 +114,7 @@ class LunaDeskViewModel(
                 )
             }
             runCatching {
-                container.lmStudioRepository.testConnection(baseUrl)
+                container.lmStudioRepository.testConnection(baseUrl, uiState.value.apiKey)
             }.onSuccess {
                 _uiState.update {
                     it.copy(
@@ -139,7 +145,7 @@ class LunaDeskViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingModels = true, inlineMessage = null) }
             runCatching {
-                container.lmStudioRepository.fetchModels(baseUrl)
+                container.lmStudioRepository.fetchModels(baseUrl, uiState.value.apiKey)
             }.onSuccess { models ->
                 _uiState.update { state ->
                     state.copy(
@@ -205,7 +211,7 @@ class LunaDeskViewModel(
         }
 
         viewModelScope.launch {
-            container.lmStudioRepository.streamChat(settings.baseUrl, request).collect { chunk ->
+            container.lmStudioRepository.streamChat(settings.baseUrl, request, settings.apiKey).collect { chunk ->
                 when {
                     chunk.delta.isNotBlank() -> appendAssistantDelta(assistantId, chunk.delta)
                     chunk.done -> finishAssistantMessage(assistantId)
@@ -253,7 +259,8 @@ class LunaDeskViewModel(
             baseUrl = state.baseUrl.trim().trimEnd('/'),
             selectedModel = state.selectedModel.trim(),
             temperature = temperature,
-            maxTokens = maxTokens
+            maxTokens = maxTokens,
+            apiKey = state.apiKey.trim()
         )
     }
 

@@ -35,19 +35,21 @@ class LmStudioRepository(
     @Volatile
     private var activeChatCall: Call? = null
 
-    suspend fun testConnection(baseUrl: String): Int {
+    suspend fun testConnection(baseUrl: String, apiKey: String = ""): Int {
         val request = Request.Builder()
             .url("${normalizeBaseUrl(baseUrl)}/v1/models")
             .get()
+            .withAuth(apiKey)
             .build()
 
         return execute(request) { 200 }
     }
 
-    suspend fun fetchModels(baseUrl: String): List<ModelInfo> {
+    suspend fun fetchModels(baseUrl: String, apiKey: String = ""): List<ModelInfo> {
         val request = Request.Builder()
             .url("${normalizeBaseUrl(baseUrl)}/v1/models")
             .get()
+            .withAuth(apiKey)
             .build()
 
         return execute(request) { body ->
@@ -55,23 +57,24 @@ class LmStudioRepository(
         }
     }
 
-    suspend fun loadModel(baseUrl: String, modelId: String) {
+    suspend fun loadModel(baseUrl: String, modelId: String, apiKey: String = "") {
         val body = json.encodeToString(LoadModelRequest(model = modelId))
             .toRequestBody(JSON)
 
         val request = Request.Builder()
             .url("${normalizeBaseUrl(baseUrl)}/api/v1/models/load")
             .post(body)
+            .withAuth(apiKey)
             .build()
 
         execute(request) { }
     }
 
-    fun streamChat(baseUrl: String, requestModel: ChatCompletionRequest): Flow<StreamChunk> {
+    fun streamChat(baseUrl: String, requestModel: ChatCompletionRequest, apiKey: String = ""): Flow<StreamChunk> {
         return callbackFlow {
             val streamJob = launch(Dispatchers.IO) {
                 var emittedContent = false
-                val call = client.newCall(buildChatRequest(baseUrl, requestModel))
+                val call = client.newCall(buildChatRequest(baseUrl, requestModel, apiKey))
                 activeChatCall = call
 
                 runCatching {
@@ -130,7 +133,7 @@ class LmStudioRepository(
                         return@onFailure
                     }
 
-                    fallbackToNonStream(baseUrl, requestModel, error.message)
+                    fallbackToNonStream(baseUrl, requestModel, apiKey, error.message)
                         .onSuccess { content ->
                             if (content.isNotBlank()) {
                                 trySend(StreamChunk(delta = content))
@@ -160,10 +163,11 @@ class LmStudioRepository(
     private suspend fun fallbackToNonStream(
         baseUrl: String,
         requestModel: ChatCompletionRequest,
+        apiKey: String,
         reason: String?
     ): Result<String> {
         return runCatching {
-            val response = execute(buildChatRequest(baseUrl, requestModel.copy(stream = false))) { body ->
+            val response = execute(buildChatRequest(baseUrl, requestModel.copy(stream = false), apiKey)) { body ->
                 json.decodeFromString<ChatCompletionResponse>(body)
             }
             response.choices.firstOrNull()?.message?.content.orEmpty().ifBlank {
@@ -197,13 +201,19 @@ class LmStudioRepository(
         return chunk.choices.any { it.finishReason != null }
     }
 
-    private fun buildChatRequest(baseUrl: String, requestModel: ChatCompletionRequest): Request {
+    private fun buildChatRequest(baseUrl: String, requestModel: ChatCompletionRequest, apiKey: String = ""): Request {
         val body = json.encodeToString(requestModel).toRequestBody(JSON)
         return Request.Builder()
             .url("${normalizeBaseUrl(baseUrl)}/v1/chat/completions")
             .post(body)
             .header("Accept", "text/event-stream")
+            .withAuth(apiKey)
             .build()
+    }
+
+    private fun Request.Builder.withAuth(apiKey: String): Request.Builder {
+        if (apiKey.isNotBlank()) header("Authorization", "Bearer $apiKey")
+        return this
     }
 
     private suspend fun <T> execute(request: Request, parser: (String) -> T): T {

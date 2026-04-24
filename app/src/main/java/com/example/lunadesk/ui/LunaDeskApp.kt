@@ -82,6 +82,7 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
                     state = state,
                     onBack = { viewModel.switchTab(AppTab.Chat) },
                     onBaseUrlChange = viewModel::updateBaseUrl,
+                    onApiKeyChange = viewModel::updateApiKey,
                     onTemperatureChange = viewModel::updateTemperature,
                     onMaxTokensChange = viewModel::updateMaxTokens,
                     onSave = viewModel::saveSettings,
