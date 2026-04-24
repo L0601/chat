@@ -1,4 +1,23 @@
 <resources>
     <string name="app_name">LunaDesk</string>
+    <string name="settings_title">设置</string>
+    <string name="settings_back">返回</string>
+    <string name="settings_base_url_label">LM Studio 地址</string>
+    <string name="settings_base_url_placeholder">http://192.168.31.30:1234</string>
+    <string name="settings_api_key_label">API Key（可选）</string>
+    <string name="settings_api_key_placeholder">sk-...</string>
+    <string name="settings_temperature_label">温度</string>
+    <string name="settings_max_tokens_label">最大输出</string>
+    <string name="settings_save">保存</string>
+    <string name="settings_test">测试</string>
+    <string name="settings_testing">测试中</string>
+    <string name="settings_loading_models">获取中</string>
+    <string name="settings_select_model">选择模型</string>
+    <string name="settings_model_list">模型列表</string>
+    <string name="settings_model_count">%1$d 个</string>
+    <string name="settings_search_model">搜索模型</string>
+    <string name="settings_empty_models">暂未获取到模型，请先点击“选择模型”。</string>
+    <string name="settings_no_matching_models">未找到匹配的模型</string>
+    <string name="settings_model_current">当前</string>
+    <string name="settings_model_pending">待选</string>
 </resources>
-

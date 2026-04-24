@@ -32,8 +32,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.lunadesk.R
 import com.example.lunadesk.data.model.ModelInfo
 import com.example.lunadesk.ui.LunaDeskUiState
 
@@ -92,7 +94,11 @@ private fun Header(onBack: () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center
     ) {
-        Text("设置", style = MaterialTheme.typography.titleLarge, color = Color(0xFF223732))
+        Text(
+            text = stringResource(R.string.settings_title),
+            style = MaterialTheme.typography.titleLarge,
+            color = Color(0xFF223732)
+        )
         Row(modifier = Modifier.fillMaxWidth()) {
             Button(
                 onClick = onBack,
@@ -103,7 +109,7 @@ private fun Header(onBack: () -> Unit) {
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "返回",
+                    contentDescription = stringResource(R.string.settings_back),
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -137,16 +143,16 @@ private fun ConfigCard(
                 onValueChange = onBaseUrlChange,
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                label = { Text("LM Studio 地址") },
-                placeholder = { Text("http://192.168.31.30:1234") }
+                label = { Text(stringResource(R.string.settings_base_url_label)) },
+                placeholder = { Text(stringResource(R.string.settings_base_url_placeholder)) }
             )
             OutlinedTextField(
                 value = state.apiKey,
                 onValueChange = onApiKeyChange,
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                label = { Text("API Key（可选）") },
-                placeholder = { Text("sk-...") }
+                label = { Text(stringResource(R.string.settings_api_key_label)) },
+                placeholder = { Text(stringResource(R.string.settings_api_key_placeholder)) }
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -157,14 +163,14 @@ private fun ConfigCard(
                     onValueChange = onTemperatureChange,
                     modifier = Modifier.weight(1f),
                     singleLine = true,
-                    label = { Text("温度") }
+                    label = { Text(stringResource(R.string.settings_temperature_label)) }
                 )
                 OutlinedTextField(
                     value = state.maxTokensInput,
                     onValueChange = onMaxTokensChange,
                     modifier = Modifier.weight(1f),
                     singleLine = true,
-                    label = { Text("最大输出") }
+                    label = { Text(stringResource(R.string.settings_max_tokens_label)) }
                 )
             }
             Row(
@@ -172,21 +178,37 @@ private fun ConfigCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(onClick = onSave, modifier = Modifier.weight(1f)) {
-                    Text("保存")
+                    Text(stringResource(R.string.settings_save))
                 }
                 Button(
                     onClick = onTestConnection,
                     enabled = !state.isTestingConnection,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(if (state.isTestingConnection) "测试中" else "测试")
+                    Text(
+                        stringResource(
+                            if (state.isTestingConnection) {
+                                R.string.settings_testing
+                            } else {
+                                R.string.settings_test
+                            }
+                        )
+                    )
                 }
                 Button(
                     onClick = onRefreshModels,
                     enabled = !state.isLoadingModels,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(if (state.isLoadingModels) "获取中" else "选择模型")
+                    Text(
+                        stringResource(
+                            if (state.isLoadingModels) {
+                                R.string.settings_loading_models
+                            } else {
+                                R.string.settings_select_model
+                            }
+                        )
+                    )
                 }
             }
         }
@@ -221,8 +243,14 @@ private fun ModelListCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(“模型列表”, style = MaterialTheme.typography.titleMedium)
-                Text(“${filteredModels.size} 个”, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    text = stringResource(R.string.settings_model_list),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = stringResource(R.string.settings_model_count, filteredModels.size),
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
             if (state.models.isNotEmpty()) {
                 OutlinedTextField(
@@ -231,13 +259,13 @@ private fun ModelListCard(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = RoundedCornerShape(14.dp),
-                    placeholder = { Text(“搜索模型”) }
+                    placeholder = { Text(stringResource(R.string.settings_search_model)) }
                 )
             }
             if (state.models.isEmpty()) {
-                Text(“暂未获取到模型，请先点击”选择模型”。”)
+                Text(stringResource(R.string.settings_empty_models))
             } else if (filteredModels.isEmpty()) {
-                Text(“未找到匹配的模型”)
+                Text(stringResource(R.string.settings_no_matching_models))
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth().weight(1f),
@@ -285,7 +313,10 @@ private fun ModelRow(
                 style = MaterialTheme.typography.bodyLarge
             )
             Text(
-                text = if (selected) "当前" else "待选",
+                text = stringResource(
+                    if (selected) R.string.settings_model_current
+                    else R.string.settings_model_pending
+                ),
                 color = Color(0xFF2A4B45),
                 style = MaterialTheme.typography.labelLarge
             )
