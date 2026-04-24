@@ -6,30 +6,45 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -55,10 +70,17 @@ fun SettingsScreen(
     onModelSearchChange: (String) -> Unit = {},
     onDismissMessage: () -> Unit = {}
 ) {
+    val filteredModels = if (state.modelSearchQuery.isBlank()) {
+        state.models
+    } else {
+        state.models.filter { it.id.contains(state.modelSearchQuery, ignoreCase = true) }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .safeDrawingPadding(),
+            .statusBarsPadding()
+            .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime)),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Header(onBack = onBack)
@@ -66,6 +88,8 @@ fun SettingsScreen(
         state.inlineMessage?.let {
             InlineNotice(message = it, onDismiss = onDismissMessage)
         }
+
+        SectionHeader(title = "服务配置")
 
         ConfigCard(
             state = state,
@@ -77,9 +101,16 @@ fun SettingsScreen(
             onTestConnection = onTestConnection,
             onRefreshModels = onRefreshModels
         )
+
+        SectionHeader(
+            title = stringResource(R.string.settings_model_list),
+            trailing = stringResource(R.string.settings_model_count, filteredModels.size)
+        )
+
         ModelListCard(
             modifier = Modifier.weight(1f),
             state = state,
+            filteredModels = filteredModels,
             onSwitchModel = onSwitchModel,
             onModelSearchChange = onModelSearchChange
         )
@@ -117,6 +148,32 @@ private fun Header(onBack: () -> Unit) {
 }
 
 @Composable
+private fun SectionHeader(title: String, trailing: String? = null) {
+    val colors = LocalAppColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = colors.textPrimary,
+            fontWeight = FontWeight.SemiBold
+        )
+        trailing?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textTertiary
+            )
+        }
+    }
+}
+
+@Composable
 private fun ConfigCard(
     state: LunaDeskUiState,
     onBaseUrlChange: (String) -> Unit,
@@ -142,8 +199,8 @@ private fun ConfigCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             OutlinedTextField(
                 value = state.baseUrl,
@@ -151,7 +208,11 @@ private fun ConfigCard(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 label = { Text(stringResource(R.string.settings_base_url_label)) },
-                placeholder = { Text(stringResource(R.string.settings_base_url_placeholder)) }
+                placeholder = { Text(stringResource(R.string.settings_base_url_placeholder)) },
+                leadingIcon = {
+                    Icon(Icons.Outlined.Link, contentDescription = null, modifier = Modifier.size(20.dp))
+                },
+                shape = RoundedCornerShape(14.dp)
             )
             OutlinedTextField(
                 value = state.apiKey,
@@ -159,11 +220,15 @@ private fun ConfigCard(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 label = { Text(stringResource(R.string.settings_api_key_label)) },
-                placeholder = { Text(stringResource(R.string.settings_api_key_placeholder)) }
+                placeholder = { Text(stringResource(R.string.settings_api_key_placeholder)) },
+                leadingIcon = {
+                    Icon(Icons.Outlined.VpnKey, contentDescription = null, modifier = Modifier.size(20.dp))
+                },
+                shape = RoundedCornerShape(14.dp)
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 OutlinedTextField(
                     value = state.temperatureInput,
@@ -175,7 +240,8 @@ private fun ConfigCard(
                     supportingText = if (tempError) {
                         { Text("范围 0 ~ 2") }
                     } else null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    shape = RoundedCornerShape(14.dp)
                 )
                 OutlinedTextField(
                     value = state.maxTokensInput,
@@ -187,46 +253,49 @@ private fun ConfigCard(
                     supportingText = if (maxError) {
                         { Text("范围 1 ~ 200000") }
                     } else null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    shape = RoundedCornerShape(14.dp)
                 )
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Button(onClick = onSave, modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.settings_save))
-                }
                 Button(
+                    onClick = onSave,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(stringResource(R.string.settings_save), maxLines = 1)
+                }
+                FilledTonalButton(
                     onClick = onTestConnection,
                     enabled = !state.isTestingConnection,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
                         stringResource(
-                            if (state.isTestingConnection) {
-                                R.string.settings_testing
-                            } else {
-                                R.string.settings_test
-                            }
-                        )
+                            if (state.isTestingConnection) R.string.settings_testing
+                            else R.string.settings_test
+                        ),
+                        maxLines = 1
                     )
                 }
-                Button(
-                    onClick = onRefreshModels,
-                    enabled = !state.isLoadingModels,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        stringResource(
-                            if (state.isLoadingModels) {
-                                R.string.settings_loading_models
-                            } else {
-                                R.string.settings_select_model
-                            }
-                        )
-                    )
-                }
+            }
+            OutlinedButton(
+                onClick = onRefreshModels,
+                enabled = !state.isLoadingModels,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    stringResource(
+                        if (state.isLoadingModels) R.string.settings_loading_models
+                        else R.string.settings_select_model
+                    ),
+                    maxLines = 1
+                )
             }
         }
     }
@@ -236,15 +305,12 @@ private fun ConfigCard(
 private fun ModelListCard(
     modifier: Modifier = Modifier,
     state: LunaDeskUiState,
+    filteredModels: List<ModelInfo>,
     onSwitchModel: (String) -> Unit,
     onModelSearchChange: (String) -> Unit
 ) {
     val colors = LocalAppColors.current
-    val filteredModels = if (state.modelSearchQuery.isBlank()) {
-        state.models
-    } else {
-        state.models.filter { it.id.contains(state.modelSearchQuery, ignoreCase = true) }
-    }
+    val focusManager = LocalFocusManager.current
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -254,22 +320,9 @@ private fun ModelListCard(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_model_list),
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = stringResource(R.string.settings_model_count, filteredModels.size),
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
             if (state.models.isNotEmpty()) {
                 OutlinedTextField(
                     value = state.modelSearchQuery,
@@ -277,24 +330,56 @@ private fun ModelListCard(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = RoundedCornerShape(14.dp),
-                    placeholder = { Text(stringResource(R.string.settings_search_model)) }
+                    placeholder = { Text(stringResource(R.string.settings_search_model)) },
+                    leadingIcon = {
+                        Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(20.dp))
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = ImeAction.Done,
+                        autoCorrect = false
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { focusManager.clearFocus() }
+                    )
                 )
             }
-            if (state.models.isEmpty()) {
-                Text(stringResource(R.string.settings_empty_models))
-            } else if (filteredModels.isEmpty()) {
-                Text(stringResource(R.string.settings_no_matching_models))
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(filteredModels, key = { it.id }) { model ->
-                        ModelRow(
-                            model = model,
-                            selected = model.id == state.selectedModel,
-                            onClick = { onSwitchModel(model.id) }
+            when {
+                state.models.isEmpty() -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            stringResource(R.string.settings_empty_models),
+                            color = colors.textTertiary,
+                            style = MaterialTheme.typography.bodyMedium
                         )
+                    }
+                }
+                filteredModels.isEmpty() -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            stringResource(R.string.settings_no_matching_models),
+                            color = colors.textTertiary,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(filteredModels, key = { it.id }) { model ->
+                            ModelRow(
+                                model = model,
+                                selected = model.id == state.selectedModel,
+                                onClick = { onSwitchModel(model.id) }
+                            )
+                        }
                     }
                 }
             }
@@ -319,11 +404,19 @@ private fun ModelRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
-                .padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .height(50.dp)
+                .padding(horizontal = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = colors.modelStatusText
+                )
+            }
             Text(
                 text = model.id,
                 modifier = Modifier.weight(1f),
@@ -337,7 +430,7 @@ private fun ModelRow(
                     else R.string.settings_model_pending
                 ),
                 color = colors.modelStatusText,
-                style = MaterialTheme.typography.labelLarge
+                style = MaterialTheme.typography.labelMedium
             )
         }
     }
