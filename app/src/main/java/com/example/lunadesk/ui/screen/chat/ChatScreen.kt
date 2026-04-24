@@ -5,14 +5,18 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import android.widget.TextView
+import androidx.compose.animation.core.InfiniteTransition
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,32 +35,45 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.lunadesk.data.model.ChatMessageUi
 import com.example.lunadesk.ui.LunaDeskUiState
+import com.example.lunadesk.ui.components.InlineNotice
+import com.example.lunadesk.ui.theme.LocalAppColors
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.latex.JLatexMathPlugin
 import io.noties.markwon.inlineparser.MarkwonInlineParserPlugin
@@ -72,9 +89,11 @@ fun ChatScreen(
     onDismissMessage: () -> Unit,
     onReset: () -> Unit = {}
 ) {
+    val colors = LocalAppColors.current
     val listState = rememberLazyListState()
+    val lastMessage = state.messages.lastOrNull()
 
-    LaunchedEffect(state.messages.size) {
+    LaunchedEffect(state.messages.size, lastMessage?.content?.length, lastMessage?.isStreaming) {
         if (state.messages.isNotEmpty()) {
             listState.animateScrollToItem(state.messages.lastIndex)
         }
@@ -96,7 +115,7 @@ fun ChatScreen(
         Surface(
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(30.dp),
-            color = Color(0xF7FFFDF9)
+            color = colors.surfaceChat
         ) {
             if (state.messages.isEmpty()) {
                 EmptyState()
@@ -130,6 +149,9 @@ private fun ChatHeader(
     onOpenMenu: () -> Unit,
     onReset: () -> Unit
 ) {
+    val colors = LocalAppColors.current
+    val haptic = LocalHapticFeedback.current
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -153,7 +175,7 @@ private fun ChatHeader(
                         modifier = Modifier
                             .width(16.dp)
                             .height(2.dp)
-                            .background(Color(0xFF1E2A27), RoundedCornerShape(1.dp))
+                            .background(colors.iconPrimary, RoundedCornerShape(1.dp))
                     )
                 }
             }
@@ -162,12 +184,12 @@ private fun ChatHeader(
         Surface(
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(18.dp),
-            color = Color(0xF6FFFFFF)
+            color = colors.surfaceOverlay
         ) {
             Text(
                 text = resolveHeaderTitle(state),
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                color = Color(0xFF2E6DB8),
+                color = colors.textAccent,
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
                 textAlign = TextAlign.Center
@@ -175,7 +197,10 @@ private fun ChatHeader(
         }
 
         Button(
-            onClick = onReset,
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onReset()
+            },
             modifier = Modifier.height(44.dp),
             shape = RoundedCornerShape(14.dp),
             colors = ghostButtonColors(),
@@ -183,7 +208,7 @@ private fun ChatHeader(
         ) {
             Text(
                 text = "重置",
-                color = Color(0xFF1E2A27),
+                color = colors.textOnButton,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold
             )
@@ -198,9 +223,12 @@ private fun ComposerBar(
     onSend: () -> Unit,
     onStop: () -> Unit
 ) {
+    val colors = LocalAppColors.current
+    val haptic = LocalHapticFeedback.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val submitMessage: () -> Unit = {
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         if (state.isSending) {
             onStop()
         } else {
@@ -214,7 +242,7 @@ private fun ComposerBar(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        color = Color(0xF5FFFDF8),
+        color = colors.surfaceComposer,
         shadowElevation = 6.dp
     ) {
         Row(
@@ -238,41 +266,42 @@ private fun ComposerBar(
                 placeholder = {
                     Text(
                         text = "问问 LunaDesk",
-                        color = Color(0xFF8A938F)
+                        color = colors.textPlaceholder
                     )
                 },
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color(0xFFF8FAFC),
-                    unfocusedContainerColor = Color(0xFFF8FAFC),
-                    disabledContainerColor = Color(0xFFF1F3F5),
+                    focusedContainerColor = colors.surfaceInput,
+                    unfocusedContainerColor = colors.surfaceInput,
+                    disabledContainerColor = colors.surfaceInputDisabled,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                     disabledIndicatorColor = Color.Transparent,
-                    cursorColor = Color(0xFF223732)
+                    cursorColor = colors.cursor
                 )
             )
 
             Button(
                 onClick = submitMessage,
                 enabled = state.isSending || state.chatInput.isNotBlank(),
-                modifier = Modifier
-                    .width(56.dp)
-                    .height(44.dp),
+                modifier = Modifier.size(48.dp),
                 shape = RoundedCornerShape(20.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (state.isSending) Color(0xFFB55D48) else Color(0xFF111111),
+                    containerColor = if (state.isSending) colors.buttonStop else colors.buttonSend,
                     contentColor = Color.White,
-                    disabledContainerColor = Color(0xFFD5D8DB),
-                    disabledContentColor = Color(0xFF7E868A)
-                )
+                    disabledContainerColor = colors.buttonDisabledBg,
+                    disabledContentColor = colors.buttonDisabledContent
+                ),
+                contentPadding = PaddingValues(0.dp)
             ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = if (state.isSending) "停" else "发",
-                        textAlign = TextAlign.Center,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                Icon(
+                    imageVector = if (state.isSending) {
+                        Icons.Default.Stop
+                    } else {
+                        Icons.AutoMirrored.Filled.Send
+                    },
+                    contentDescription = if (state.isSending) "停止" else "发送",
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
     }
@@ -280,6 +309,7 @@ private fun ComposerBar(
 
 @Composable
 private fun EmptyState() {
+    val colors = LocalAppColors.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -291,7 +321,7 @@ private fun EmptyState() {
         Text(
             text = "左上角打开侧边栏进入设置，连接局域网模型服务后即可开始对话。",
             textAlign = TextAlign.Center,
-            color = Color(0xFF50625C),
+            color = colors.textSecondary,
             modifier = Modifier.padding(top = 10.dp)
         )
     }
@@ -299,9 +329,11 @@ private fun EmptyState() {
 
 @Composable
 private fun MessageBubble(message: ChatMessageUi) {
+    val colors = LocalAppColors.current
     val isUser = message.role == "user"
-    val background = if (isUser) Color(0xFFD8E9F4) else Color(0xFFF8EFD6)
+    val background = if (isUser) colors.bubbleUser else colors.bubbleAssistant
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -324,24 +356,28 @@ private fun MessageBubble(message: ChatMessageUi) {
                     ) {
                         Text(
                             text = if (isUser) "你" else "Luna",
-                            color = if (isUser) Color(0xFF35546B) else Color(0xFF6A5632),
+                            color = if (isUser) colors.bubbleUserLabel else colors.bubbleAssistantLabel,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                         if (message.content.isNotBlank()) {
-                            CopyBubbleButton(
-                                onClick = {
-                                    copyMessage(context, message.content)
-                                }
-                            )
+                            CopyBubbleButton(onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                copyMessage(context, message.content)
+                            })
                         }
                     }
-                    MarkdownText(
-                        markdown = message.content.ifBlank {
-                            if (message.isStreaming) "正在生成..." else "暂无内容"
-                        },
-                        isUser = isUser
-                    )
+                    if (message.isStreaming && message.content.isBlank()) {
+                        ThreeDotLoading()
+                    } else {
+                        MarkdownText(
+                            markdown = message.content.ifBlank { "暂无内容" },
+                            isUser = isUser
+                        )
+                        if (message.isStreaming && message.content.isNotBlank()) {
+                            BlinkingCursor()
+                        }
+                    }
                     message.errorText?.let {
                         Text(text = it, color = MaterialTheme.colorScheme.error)
                     }
@@ -352,7 +388,42 @@ private fun MessageBubble(message: ChatMessageUi) {
 }
 
 @Composable
+private fun ThreeDotLoading() {
+    val transition = rememberInfiniteTransition(label = "dots")
+    val dotCount by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 4f,
+        animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Restart),
+        label = "dotCount"
+    )
+    val dots = ".".repeat(dotCount.toInt().coerceIn(0, 3))
+    Text(
+        text = "生成中$dots",
+        color = LocalAppColors.current.textTertiary,
+        style = MaterialTheme.typography.bodyMedium
+    )
+}
+
+@Composable
+private fun BlinkingCursor() {
+    val transition = rememberInfiniteTransition(label = "cursor")
+    val cursorAlpha by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(tween(500), RepeatMode.Reverse),
+        label = "cursorAlpha"
+    )
+    Text(
+        text = "▌",
+        modifier = Modifier.alpha(cursorAlpha),
+        color = LocalAppColors.current.textPrimary,
+        fontSize = 16.sp
+    )
+}
+
+@Composable
 private fun MarkdownText(markdown: String, isUser: Boolean) {
+    val colors = LocalAppColors.current
     val context = LocalContext.current
     val markwon = remember(context) {
         Markwon.builder(context)
@@ -362,18 +433,19 @@ private fun MarkdownText(markdown: String, isUser: Boolean) {
             })
             .build()
     }
-    val textColor = if (isUser) "#203847" else "#3A3224"
+    val textColorInt = if (isUser) colors.bubbleUserText.toArgb() else colors.bubbleAssistantText.toArgb()
 
     AndroidView(
         factory = { ctx ->
             TextView(ctx).apply {
-                setTextColor(android.graphics.Color.parseColor(textColor))
+                setTextColor(textColorInt)
                 textSize = 16f
                 setLineSpacing(0f, 1.4f)
                 includeFontPadding = false
             }
         },
         update = { textView ->
+            textView.setTextColor(textColorInt)
             markwon.setMarkdown(textView, normalizeMarkdown(markdown))
         },
         modifier = Modifier.fillMaxWidth()
@@ -382,79 +454,29 @@ private fun MarkdownText(markdown: String, isUser: Boolean) {
 
 @Composable
 private fun CopyBubbleButton(onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier
-            .size(28.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        color = Color(0xF4FFFFFF),
-        tonalElevation = 0.dp
+    val colors = LocalAppColors.current
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(28.dp)
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .offset(x = 2.dp, y = (-2).dp)
-                    .border(1.2.dp, Color(0xFF42504B), RoundedCornerShape(2.dp))
-            )
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .offset(x = (-2).dp, y = 2.dp)
-                    .border(1.2.dp, Color(0xFF42504B), RoundedCornerShape(2.dp))
-            )
-        }
-    }
-}
-
-@Composable
-private fun InlineNotice(message: String, onDismiss: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFFFCECC8), RoundedCornerShape(14.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            message,
-            modifier = Modifier.weight(1f),
-            color = Color(0xFF5B4C1F),
-            style = MaterialTheme.typography.bodyMedium
+        Icon(
+            imageVector = Icons.Outlined.ContentCopy,
+            contentDescription = "复制",
+            modifier = Modifier.size(16.dp),
+            tint = colors.iconCopyBorder
         )
-        TextButton(onClick = onDismiss) {
-            Text("关闭")
-        }
     }
 }
 
 @Composable
-private fun ghostButtonColors() = ButtonDefaults.buttonColors(
-    containerColor = Color(0xF6FFFFFF),
-    contentColor = Color(0xFF1E2A27),
-    disabledContainerColor = Color(0xE8FFFFFF),
-    disabledContentColor = Color(0xFF1E2A27)
-)
-
-private fun normalizeMarkdown(markdown: String): String {
-    val normalizedLayout = markdown
-        .replace(Regex("(?m)(?<!\\n)(#{1,6}\\s+)"), "\n\n$1")
-        .replace(Regex("(?m)(?<!\\n)(---+)"), "\n\n$1")
-        .replace(Regex("(?m)(?<!\\n)([-*]\\s+)"), "\n$1")
-        .replace(Regex("(?m)(?<!\\n)(\\d+\\.\\s+)"), "\n$1")
-        .replace(Regex("(?m)```"), "\n```")
-        .replace(Regex("(?m)^>(.+)$"), "\n> $1")
-        .replace(Regex("\\n{3,}"), "\n\n")
-
-    return INLINE_MATH_REGEX.replace(normalizedLayout) { match ->
-        val value = match.groupValues[1].trim()
-        if (value.isEmpty()) {
-            match.value
-        } else {
-            "$$$$${value}$$$$"
-        }
-    }
+private fun ghostButtonColors() = run {
+    val colors = LocalAppColors.current
+    ButtonDefaults.buttonColors(
+        containerColor = colors.surfaceOverlay,
+        contentColor = colors.textOnButton,
+        disabledContainerColor = colors.surfaceOverlayDisabled,
+        disabledContentColor = colors.textOnButton
+    )
 }
 
 private fun copyMessage(context: Context, content: String) {
@@ -463,8 +485,6 @@ private fun copyMessage(context: Context, content: String) {
     clipboard.setPrimaryClip(ClipData.newPlainText("chat_message", content))
     Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
 }
-
-private val INLINE_MATH_REGEX = Regex("(?<!\\\\)\\$([^$\\n]+?)(?<!\\\\)\\$")
 
 private fun resolveHeaderTitle(state: LunaDeskUiState): String {
     return when {

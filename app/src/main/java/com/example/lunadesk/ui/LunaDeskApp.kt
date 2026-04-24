@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.lunadesk.ui.screen.chat.ChatScreen
 import com.example.lunadesk.ui.screen.settings.SettingsScreen
+import com.example.lunadesk.ui.theme.LocalAppColors
 import kotlinx.coroutines.launch
 
 @Composable
@@ -36,13 +37,14 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
     val state by viewModel.uiState.collectAsState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val colors = LocalAppColors.current
 
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
                 modifier = Modifier.fillMaxHeight().fillMaxWidth(0.82f),
-                drawerContainerColor = Color(0xFFF8F5EC)
+                drawerContainerColor = colors.drawerBg
             ) {
                 DrawerContent(
                     state = state,
@@ -59,7 +61,11 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(Color(0xFFF7F4EA), Color(0xFFE5EEF4), Color(0xFFDDE3DB))
+                        colors = listOf(
+                            colors.gradientStart,
+                            colors.gradientMiddle,
+                            colors.gradientEnd
+                        )
                     )
                 )
         ) {
@@ -87,7 +93,8 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
                     onTestConnection = viewModel::testConnection,
                     onRefreshModels = viewModel::refreshModels,
                     onSwitchModel = viewModel::switchModel,
-                    onModelSearchChange = viewModel::updateModelSearch
+                    onModelSearchChange = viewModel::updateModelSearch,
+                    onDismissMessage = viewModel::clearInlineMessage
                 )
             }
         }
@@ -99,10 +106,11 @@ private fun DrawerContent(
     state: LunaDeskUiState,
     onNavigate: (AppTab) -> Unit
 ) {
+    val colors = LocalAppColors.current
     Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 28.dp)) {
         Text(
             text = "LunaDesk",
-            color = Color(0xFF223732),
+            color = colors.textPrimary,
             fontWeight = FontWeight.SemiBold
         )
         Card(
@@ -110,16 +118,16 @@ private fun DrawerContent(
                 .fillMaxWidth()
                 .padding(top = 10.dp, bottom = 18.dp),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF2EEE3))
+            colors = CardDefaults.cardColors(containerColor = colors.drawerCardBg)
         ) {
             Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
                 Text(
                     text = "当前模型",
-                    color = Color(0xFF6D7E79)
+                    color = colors.textTertiary
                 )
                 Text(
                     text = state.selectedModel.ifBlank { "未选择模型" },
-                    color = Color(0xFF223732),
+                    color = colors.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 4.dp)
@@ -131,7 +139,7 @@ private fun DrawerContent(
             selected = state.currentTab == AppTab.Chat,
             onClick = { onNavigate(AppTab.Chat) },
             colors = NavigationDrawerItemDefaults.colors(
-                selectedContainerColor = Color(0xFFE4EEE8),
+                selectedContainerColor = colors.drawerSelectedItem,
                 unselectedContainerColor = Color.Transparent
             )
         )
@@ -140,7 +148,7 @@ private fun DrawerContent(
             selected = state.currentTab == AppTab.Settings,
             onClick = { onNavigate(AppTab.Settings) },
             colors = NavigationDrawerItemDefaults.colors(
-                selectedContainerColor = Color(0xFFE4EEE8),
+                selectedContainerColor = colors.drawerSelectedItem,
                 unselectedContainerColor = Color.Transparent
             ),
             modifier = Modifier.padding(top = 8.dp)
