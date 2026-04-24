@@ -153,7 +153,7 @@ private fun DrawerContent(
             selected = false,
             onClick = onReset,
             colors = NavigationDrawerItemDefaults.colors(
-                unselectedContainerColor = Color(0xFFF6EFE0)
+                unselectedContainerColor = Color.Transparent
             ),
             modifier = Modifier.padding(top = 16.dp)
         )
