@@ -53,9 +53,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -94,29 +97,24 @@ fun ChatScreen(
 ) {
     val colors = LocalAppColors.current
     val listState = rememberLazyListState()
-    val lastMessage = state.messages.lastOrNull()
 
-    val isAtBottom by remember {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            if (info.totalItemsCount == 0) return@derivedStateOf true
-            val lastVisible = info.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf true
-            // 锚点 item 可见 → 一定在底部
-            if (lastVisible.index >= info.totalItemsCount - 1) return@derivedStateOf true
-            // 最后一条消息可见且底部接近视口底部（100px 容差）
-            lastVisible.index >= info.totalItemsCount - 2 &&
-                lastVisible.offset + lastVisible.size <= info.viewportEndOffset + 100
-        }
+    // 使用 reverseLayout 后，index 0 = 最新消息（底部锚定）
+    // 仅在用户手动滚动结束时更新标记，避免插入新消息导致误判
+    var shouldAutoScroll by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        snapshotFlow { listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { scrolling ->
+                if (!scrolling) {
+                    shouldAutoScroll = listState.firstVisibleItemIndex <= 1
+                }
+            }
     }
 
-    LaunchedEffect(state.messages.size, lastMessage?.content?.length, lastMessage?.isStreaming) {
-        if (state.messages.isEmpty() || listState.isScrollInProgress || !isAtBottom) return@LaunchedEffect
-        val anchorIndex = state.messages.size // 锚点在消息列表之后
-        if (lastMessage?.isStreaming == true) {
-            listState.scrollToItem(anchorIndex)
-        } else {
-            listState.animateScrollToItem(anchorIndex)
-        }
+    LaunchedEffect(state.messages.size) {
+        if (state.messages.isEmpty() || !shouldAutoScroll) return@LaunchedEffect
+        listState.animateScrollToItem(0)
     }
 
     Column(
@@ -145,13 +143,11 @@ fun ChatScreen(
                         .fillMaxSize()
                         .padding(horizontal = 14.dp, vertical = 14.dp),
                     state = listState,
+                    reverseLayout = true,
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(state.messages, key = { it.id }) { message ->
+                    items(state.messages.asReversed(), key = { it.id }) { message ->
                         MessageBubble(message = message)
-                    }
-                    item(key = "_bottom_anchor") {
-                        Spacer(Modifier.height(1.dp))
                     }
                 }
             }
