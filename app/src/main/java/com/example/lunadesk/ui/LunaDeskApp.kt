@@ -18,9 +18,14 @@ import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -29,6 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.lunadesk.ui.screen.chat.ChatScreen
 import com.example.lunadesk.ui.screen.settings.SettingsScreen
+import com.example.lunadesk.ui.components.showAppToast
 import com.example.lunadesk.ui.theme.LocalAppColors
 import kotlinx.coroutines.launch
 
@@ -38,6 +44,14 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val colors = LocalAppColors.current
+    val context = LocalContext.current
+    var activeToast by remember { mutableStateOf<android.widget.Toast?>(null) }
+
+    LaunchedEffect(state.toastEvent?.id) {
+        val event = state.toastEvent ?: return@LaunchedEffect
+        activeToast = showAppToast(context, event.message, activeToast)
+        viewModel.consumeToast(event.id)
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -77,7 +91,6 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
                     onInputChange = viewModel::updateChatInput,
                     onSend = viewModel::sendMessage,
                     onStop = viewModel::stopStreaming,
-                    onDismissMessage = viewModel::clearInlineMessage,
                     onReset = viewModel::resetConversation
                 )
 
@@ -93,8 +106,7 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
                     onTestConnection = viewModel::testConnection,
                     onRefreshModels = viewModel::refreshModels,
                     onSwitchModel = viewModel::switchModel,
-                    onModelSearchChange = viewModel::updateModelSearch,
-                    onDismissMessage = viewModel::clearInlineMessage
+                    onModelSearchChange = viewModel::updateModelSearch
                 )
             }
         }

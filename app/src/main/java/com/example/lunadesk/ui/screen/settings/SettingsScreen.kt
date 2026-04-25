@@ -51,7 +51,6 @@ import androidx.compose.ui.unit.dp
 import com.example.lunadesk.R
 import com.example.lunadesk.data.model.ModelInfo
 import com.example.lunadesk.ui.LunaDeskUiState
-import com.example.lunadesk.ui.components.InlineNotice
 import com.example.lunadesk.ui.theme.LocalAppColors
 
 @Composable
@@ -67,8 +66,7 @@ fun SettingsScreen(
     onTestConnection: () -> Unit,
     onRefreshModels: () -> Unit,
     onSwitchModel: (String) -> Unit,
-    onModelSearchChange: (String) -> Unit = {},
-    onDismissMessage: () -> Unit = {}
+    onModelSearchChange: (String) -> Unit = {}
 ) {
     val filteredModels = if (state.modelSearchQuery.isBlank()) {
         state.models
@@ -84,10 +82,6 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Header(onBack = onBack)
-
-        state.inlineMessage?.let {
-            InlineNotice(message = it, onDismiss = onDismissMessage)
-        }
 
         SectionHeader(title = "服务配置")
 

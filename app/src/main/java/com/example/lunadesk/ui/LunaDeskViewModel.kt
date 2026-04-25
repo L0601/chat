@@ -33,9 +33,14 @@ data class LunaDeskUiState(
     val isLoadingModels: Boolean = false,
     val isTestingConnection: Boolean = false,
     val isSending: Boolean = false,
-    val inlineMessage: String? = null,
+    val toastEvent: ToastEvent? = null,
     val apiKey: String = "",
     val modelSearchQuery: String = ""
+)
+
+data class ToastEvent(
+    val id: Long,
+    val message: String
 )
 
 class LunaDeskViewModel(
@@ -87,31 +92,32 @@ class LunaDeskViewModel(
         _uiState.update { it.copy(modelSearchQuery = query) }
     }
 
-    fun clearInlineMessage() {
-        _uiState.update { it.copy(inlineMessage = null) }
+    fun consumeToast(toastId: Long) {
+        _uiState.update { state ->
+            state.takeIf { it.toastEvent?.id == toastId }?.copy(toastEvent = null) ?: state
+        }
     }
 
     fun saveSettings() {
         viewModelScope.launch {
             val state = uiState.value
-            val settings = buildSettings(state) ?: return@launch showMessage("参数格式不正确")
+            val settings = buildSettings(state) ?: return@launch showToast("参数格式不正确")
             container.settingsRepository.saveSettings(settings)
             _uiState.update { it.copy(connectionStatus = "配置已保存") }
-            showMessage("配置已保存")
+            showToast("配置已保存")
         }
     }
 
     fun testConnection() {
         val baseUrl = uiState.value.baseUrl.trim()
         if (baseUrl.isBlank()) {
-            showMessage("请先填写服务地址")
+            showToast("请先填写服务地址")
             return
         }
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
                     isTestingConnection = true,
-                    inlineMessage = null,
                     connectionStatus = "正在测试连接"
                 )
             }
@@ -124,7 +130,7 @@ class LunaDeskViewModel(
                         connectionStatus = "连接成功，可访问模型服务"
                     )
                 }
-                showMessage("连接测试成功")
+                showToast("连接测试成功")
             }.onFailure { error ->
                 val message = readableError(error)
                 _uiState.update { state ->
@@ -133,7 +139,7 @@ class LunaDeskViewModel(
                         connectionStatus = message
                     )
                 }
-                showMessage(message)
+                showToast(message)
             }
         }
     }
@@ -141,11 +147,11 @@ class LunaDeskViewModel(
     fun refreshModels() {
         val baseUrl = uiState.value.baseUrl.trim()
         if (baseUrl.isBlank()) {
-            showMessage("请先填写服务地址")
+            showToast("请先填写服务地址")
             return
         }
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingModels = true, inlineMessage = null) }
+            _uiState.update { it.copy(isLoadingModels = true) }
             runCatching {
                 container.lmStudioRepository.fetchModels(baseUrl, uiState.value.apiKey)
             }.onSuccess { models ->
@@ -161,7 +167,7 @@ class LunaDeskViewModel(
                 persistCurrentSettings()
             }.onFailure {
                 _uiState.update { it.copy(isLoadingModels = false) }
-                showMessage(readableError(it))
+                showToast(readableError(it))
             }
         }
     }
@@ -175,21 +181,21 @@ class LunaDeskViewModel(
         _uiState.update {
             it.copy(
                 selectedModel = modelId,
-                inlineMessage = "已选择 $modelId",
                 connectionStatus = "当前模型：$modelId"
             )
         }
+        showToast("已切换到 $modelId")
         persistCurrentSettings()
     }
 
     fun sendMessage() {
         val state = uiState.value
         if (state.isSending) return
-        if (state.baseUrl.isBlank()) return showMessage("请先配置服务地址")
-        if (state.selectedModel.isBlank()) return showMessage("请先选择模型")
+        if (state.baseUrl.isBlank()) return showToast("请先配置服务地址")
+        if (state.selectedModel.isBlank()) return showToast("请先选择模型")
         if (state.chatInput.isBlank()) return
 
-        val settings = buildSettings(state) ?: return showMessage("参数格式不正确")
+        val settings = buildSettings(state) ?: return showToast("参数格式不正确")
         val userMessage = ChatMessageUi(
             id = UUID.randomUUID().toString(),
             role = "user",
@@ -208,7 +214,6 @@ class LunaDeskViewModel(
             it.copy(
                 chatInput = "",
                 isSending = true,
-                inlineMessage = "正在生成",
                 messages = it.messages + userMessage + assistantPlaceholder
             )
         }
@@ -230,7 +235,6 @@ class LunaDeskViewModel(
         _uiState.update { state ->
             state.copy(
                 isSending = false,
-                inlineMessage = "已停止生成",
                 messages = state.messages.map { msg ->
                     if (msg.isStreaming) {
                         val content = msg.content.ifBlank { "已停止生成" }
@@ -249,10 +253,10 @@ class LunaDeskViewModel(
             it.copy(
                 messages = emptyList(),
                 chatInput = "",
-                isSending = false,
-                inlineMessage = "已重置本轮对话"
+                isSending = false
             )
         }
+        showToast("已重置本轮对话")
     }
 
     private fun buildSettings(state: LunaDeskUiState): UserSettings? {
@@ -288,7 +292,6 @@ class LunaDeskViewModel(
     private fun appendAssistantDelta(assistantId: String, delta: String) {
         _uiState.update { state ->
             state.copy(
-                inlineMessage = null,
                 messages = state.messages.map { msg ->
                     if (msg.id == assistantId) {
                         msg.copy(content = msg.content + delta, isStreaming = true)
@@ -304,7 +307,6 @@ class LunaDeskViewModel(
         _uiState.update { state ->
             state.copy(
                 isSending = false,
-                inlineMessage = null,
                 connectionStatus = "本轮对话已完成，当前共有 ${countCompletedMessages(state.messages)} 条消息",
                 messages = state.messages.map { msg ->
                     if (msg.id == assistantId) msg.copy(isStreaming = false) else msg
@@ -314,10 +316,11 @@ class LunaDeskViewModel(
     }
 
     private fun finishCancelledMessage(assistantId: String) {
+        var shouldToast = false
         _uiState.update { state ->
+            shouldToast = state.isSending
             state.copy(
                 isSending = false,
-                inlineMessage = "已停止生成",
                 messages = state.messages.map { msg ->
                     if (msg.id == assistantId) {
                         msg.copy(
@@ -330,13 +333,15 @@ class LunaDeskViewModel(
                 }
             )
         }
+        if (shouldToast) {
+            showToast("已停止生成")
+        }
     }
 
     private fun markAssistantError(assistantId: String, error: String) {
         _uiState.update { state ->
             state.copy(
                 isSending = false,
-                inlineMessage = error,
                 connectionStatus = "请求失败，请检查服务状态",
                 messages = state.messages.map { msg ->
                     if (msg.id == assistantId) {
@@ -347,6 +352,7 @@ class LunaDeskViewModel(
                 }
             )
         }
+        showToast(error)
     }
 
     private fun persistCurrentSettings() {
@@ -357,8 +363,10 @@ class LunaDeskViewModel(
         }
     }
 
-    private fun showMessage(message: String) {
-        _uiState.update { it.copy(inlineMessage = message) }
+    private fun showToast(message: String) {
+        _uiState.update { state ->
+            state.copy(toastEvent = nextToastEvent(message, state.toastEvent))
+        }
     }
 
     private fun countCompletedMessages(messages: List<ChatMessageUi>): Int {
@@ -368,6 +376,14 @@ class LunaDeskViewModel(
     private fun readableError(error: Throwable): String {
         return error.message ?: "请求失败，请稍后重试"
     }
+}
+
+internal fun nextToastEvent(
+    message: String,
+    current: ToastEvent?
+): ToastEvent {
+    val nextId = (current?.id ?: 0L) + 1L
+    return ToastEvent(id = nextId, message = message)
 }
 
 internal fun resolveSelectedModel(

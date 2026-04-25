@@ -3,7 +3,6 @@ package com.example.lunadesk.ui.screen.chat
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.widget.Toast
 import android.widget.TextView
 import androidx.compose.animation.core.InfiniteTransition
 import androidx.compose.animation.core.RepeatMode
@@ -78,7 +77,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.lunadesk.data.model.ChatMessageUi
 import com.example.lunadesk.ui.LunaDeskUiState
-import com.example.lunadesk.ui.components.InlineNotice
+import com.example.lunadesk.ui.components.showAppToast
 import com.example.lunadesk.ui.theme.LocalAppColors
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.latex.JLatexMathPlugin
@@ -92,7 +91,6 @@ fun ChatScreen(
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
-    onDismissMessage: () -> Unit,
     onReset: () -> Unit = {}
 ) {
     val colors = LocalAppColors.current
@@ -125,10 +123,6 @@ fun ChatScreen(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         ChatHeader(state = state, onOpenMenu = onOpenMenu, onReset = onReset)
-
-        state.inlineMessage?.let {
-            InlineNotice(message = it, onDismiss = onDismissMessage)
-        }
 
         Surface(
             modifier = Modifier.weight(1f),
@@ -503,7 +497,7 @@ private fun copyMessage(context: Context, content: String) {
     if (content.isBlank()) return
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     clipboard.setPrimaryClip(ClipData.newPlainText("chat_message", content))
-    Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+    showAppToast(context, "已复制")
 }
 
 private fun resolveHeaderTitle(state: LunaDeskUiState): String {
