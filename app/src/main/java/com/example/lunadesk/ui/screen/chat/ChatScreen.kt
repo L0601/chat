@@ -363,18 +363,11 @@ private fun MessageBubble(message: ChatMessageUi) {
         ) {
             Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (isUser) "你" else "Luna",
-                            color = if (isUser) colors.bubbleUserLabel else colors.bubbleAssistantLabel,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        if (message.content.isNotBlank()) {
+                    if (message.content.isNotBlank()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
                             CopyBubbleButton(onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 copyMessage(context, message.content)
