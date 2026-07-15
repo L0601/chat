@@ -11,7 +11,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -545,7 +544,9 @@ private class AutoScrollController(
 ) {
     private val requests = Channel<Int>(capacity = Channel.CONFLATED)
     private val worker = scope.launch {
-        for (targetIndex in requests) listState.animateToBottom(targetIndex)
+        for (targetIndex in requests) {
+            launch { listState.animateToBottom(targetIndex) }.join()
+        }
     }
 
     fun request(targetIndex: Int) {
@@ -554,7 +555,6 @@ private class AutoScrollController(
 
     fun cancelForUser() {
         while (requests.tryReceive().isSuccess) Unit
-        scope.launch { listState.scroll(MutatePriority.UserInput) {} }
     }
 
     fun dispose() {

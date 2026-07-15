@@ -446,7 +446,11 @@ private fun EditorActions(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Button(onClick = onSave, modifier = Modifier.weight(1f)) {
+        Button(
+            onClick = onSave,
+            enabled = state.hasUnsavedChanges,
+            modifier = Modifier.weight(1f)
+        ) {
             Text(if (state.hasUnsavedChanges) "保存配置" else "已保存")
         }
         OutlinedButton(
