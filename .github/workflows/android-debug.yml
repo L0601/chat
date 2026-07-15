@@ -34,7 +34,9 @@ jobs:
         shell: bash
         run: |
           expected="a33e71841b3ae353980f7c6cd4989cf97c28ac43f56710f4fd539edf6cd62a9a"
-          actual="$(apksigner verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1)"
+          apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$apksigner"
+          actual="$("$apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1)"
           test "$actual" = "$expected"
 
       - name: Upload Artifact
