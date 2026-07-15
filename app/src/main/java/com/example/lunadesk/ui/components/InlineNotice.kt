@@ -13,15 +13,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.lunadesk.ui.theme.LocalAppColors
 
 @Composable
 fun InlineNotice(message: String, onDismiss: () -> Unit) {
-    val colors = LocalAppColors.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(colors.noticeBg, RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(14.dp))
             .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -29,7 +27,7 @@ fun InlineNotice(message: String, onDismiss: () -> Unit) {
         Text(
             message,
             modifier = Modifier.weight(1f),
-            color = colors.noticeText,
+            color = MaterialTheme.colorScheme.onErrorContainer,
             style = MaterialTheme.typography.bodyMedium
         )
         TextButton(onClick = onDismiss) {

@@ -4,46 +4,57 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.TextView
-import androidx.compose.animation.core.InfiniteTransition
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,13 +63,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -74,15 +86,31 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.lunadesk.data.model.ChatMessageUi
 import com.example.lunadesk.ui.LunaDeskUiState
 import com.example.lunadesk.ui.components.showAppToast
-import com.example.lunadesk.ui.theme.LocalAppColors
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.latex.JLatexMathPlugin
 import io.noties.markwon.inlineparser.MarkwonInlineParserPlugin
+import kotlin.math.abs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
+
+private const val AUTO_SCROLL_DURATION_MS = 250
+
+internal data class AutoFollowState(
+    val pausedGenerationId: String? = null
+) {
+    fun pauseFor(generationId: String?): AutoFollowState {
+        return if (generationId == null) this else copy(pausedGenerationId = generationId)
+    }
+
+    fun shouldFollow(generationId: String): Boolean {
+        return pausedGenerationId != generationId
+    }
+}
 
 @Composable
 fun ChatScreen(
@@ -92,62 +120,49 @@ fun ChatScreen(
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
-    onReset: () -> Unit = {}
+    onReset: () -> Unit
 ) {
-    val colors = LocalAppColors.current
     val listState = rememberLazyListState()
-
-    // 使用 reverseLayout 后，index 0 = 最新消息（底部锚定）
-    // 仅在用户手动滚动结束时更新标记，避免插入新消息导致误判
-    var shouldAutoScroll by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
-        snapshotFlow { listState.isScrollInProgress }
-            .distinctUntilChanged()
-            .collect { scrolling ->
-                if (!scrolling) {
-                    shouldAutoScroll = listState.firstVisibleItemIndex <= 1
-                }
-            }
+    val autoScroll = rememberAutoScrollController(listState)
+    val streamingMessage = state.messages.lastOrNull { it.isStreaming }
+    var followState by remember { mutableStateOf(AutoFollowState()) }
+    val isAtBottom by remember(state.messages.size) {
+        derivedStateOf { listState.isAtBottom(state.messages.size) }
     }
 
-    LaunchedEffect(state.messages.size) {
-        if (state.messages.isEmpty() || !shouldAutoScroll) return@LaunchedEffect
-        listState.animateScrollToItem(0)
+    LaunchedEffect(listState, streamingMessage?.id) {
+        listState.interactionSource.interactions.collect { interaction ->
+            if (interaction is DragInteraction.Start && streamingMessage != null) {
+                followState = followState.pauseFor(streamingMessage.id)
+                autoScroll.cancelForUser()
+            }
+        }
+    }
+
+    LaunchedEffect(
+        state.messages.size,
+        streamingMessage?.content?.length,
+        streamingMessage?.id
+    ) {
+        val message = streamingMessage ?: return@LaunchedEffect
+        if (followState.shouldFollow(message.id)) autoScroll.request(state.messages.size)
     }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .statusBarsPadding()
-            .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime)),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
     ) {
         ChatHeader(state = state, onOpenMenu = onOpenMenu, onReset = onReset)
-
-        Surface(
+        MessageArea(
             modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(30.dp),
-            color = colors.surfaceChat
-        ) {
-            if (state.messages.isEmpty()) {
-                EmptyState()
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 14.dp, vertical = 14.dp),
-                    state = listState,
-                    reverseLayout = true,
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    items(state.messages.asReversed(), key = { it.id }) { message ->
-                        MessageBubble(message = message)
-                    }
-                }
-            }
-        }
-
+            state = state,
+            listState = listState,
+            showLatestButton = state.messages.isNotEmpty() && !isAtBottom,
+            onShowLatest = { autoScroll.request(state.messages.size) },
+            onOpenMenu = onOpenMenu
+        )
         ComposerBar(
             state = state,
             onInputChange = onInputChange,
@@ -163,59 +178,106 @@ private fun ChatHeader(
     onOpenMenu: () -> Unit,
     onReset: () -> Unit
 ) {
-    val colors = LocalAppColors.current
-    val haptic = LocalHapticFeedback.current
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .height(56.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Button(
-            onClick = onOpenMenu,
-            modifier = Modifier.size(44.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ghostButtonColors(),
-            contentPadding = PaddingValues(0.dp)
+        IconButton(onClick = onOpenMenu) {
+            Icon(Icons.Default.Menu, contentDescription = "打开导航菜单")
+        }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (state.isSending) GeneratingDot()
+                Text(
+                    state.activeProfile?.name ?: "LunaDesk",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                state.selectedModel.ifBlank { "尚未选择模型" },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        IconButton(onClick = onReset, enabled = state.messages.isNotEmpty()) {
+            Icon(Icons.Outlined.DeleteSweep, contentDescription = "重置当前对话")
+        }
+    }
+}
+
+@Composable
+private fun MessageArea(
+    modifier: Modifier,
+    state: LunaDeskUiState,
+    listState: LazyListState,
+    showLatestButton: Boolean,
+    onShowLatest: () -> Unit,
+    onOpenMenu: () -> Unit
+) {
+    Box(modifier = modifier.fillMaxWidth()) {
+        if (state.messages.isEmpty()) {
+            EmptyState(onOpenMenu)
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                state = listState,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
-                repeat(3) {
-                    Box(
-                        modifier = Modifier
-                            .width(16.dp)
-                            .height(2.dp)
-                            .background(colors.iconPrimary, RoundedCornerShape(1.dp))
-                    )
+                items(state.messages, key = { it.id }) { message ->
+                    MessageBlock(message)
                 }
+                item(key = "_bottom_anchor") { Spacer(Modifier.height(1.dp)) }
             }
         }
+        if (showLatestButton) {
+            FilledTonalButton(
+                onClick = onShowLatest,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 8.dp, bottom = 12.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+            ) {
+                Text("查看最新")
+            }
+        }
+    }
+}
 
-        HeaderStatusPill(
-            status = resolveHeaderStatus(state),
-            modifier = Modifier.weight(1f)
+@Composable
+private fun EmptyState(onOpenMenu: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            "有什么可以帮忙的？",
+            style = MaterialTheme.typography.headlineMedium,
+            textAlign = TextAlign.Center
         )
-
-        Button(
-            onClick = {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onReset()
-            },
-            modifier = Modifier.height(44.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ghostButtonColors(),
-            contentPadding = PaddingValues(horizontal = 12.dp)
-        ) {
-            Text(
-                text = "重置",
-                color = colors.textOnButton,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold
-            )
+        Text(
+            "选择一套 API 配置和模型，然后开始对话。",
+            modifier = Modifier.padding(top = 10.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Button(onClick = onOpenMenu, modifier = Modifier.padding(top = 20.dp)) {
+            Text("选择 API 配置")
         }
     }
 }
@@ -227,15 +289,12 @@ private fun ComposerBar(
     onSend: () -> Unit,
     onStop: () -> Unit
 ) {
-    val colors = LocalAppColors.current
     val haptic = LocalHapticFeedback.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
-    val submitMessage: () -> Unit = {
+    val submit: () -> Unit = {
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-        if (state.isSending) {
-            onStop()
-        } else {
+        if (state.isSending) onStop() else {
             onSend()
             focusManager.clearFocus(force = true)
             keyboardController?.hide()
@@ -244,66 +303,54 @@ private fun ComposerBar(
     }
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        color = colors.surfaceComposer,
-        shadowElevation = 6.dp
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp),
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 3.dp,
+        border = ButtonDefaults.outlinedButtonBorder(enabled = true)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.padding(start = 10.dp, end = 8.dp, top = 7.dp, bottom = 7.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedTextField(
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 52.dp),
                 value = state.chatInput,
                 onValueChange = onInputChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 50.dp),
                 minLines = 1,
                 maxLines = 4,
+                placeholder = { Text("问问 LunaDesk") },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { submitMessage() }),
-                shape = RoundedCornerShape(18.dp),
-                placeholder = {
-                    Text(
-                        text = "问问 LunaDesk",
-                        color = colors.textPlaceholder
-                    )
-                },
+                keyboardActions = KeyboardActions(onSend = { submit() }),
+                shape = RoundedCornerShape(22.dp),
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = colors.surfaceInput,
-                    unfocusedContainerColor = colors.surfaceInput,
-                    disabledContainerColor = colors.surfaceInputDisabled,
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent,
-                    cursorColor = colors.cursor
+                    disabledIndicatorColor = Color.Transparent
                 )
             )
-
             Button(
-                onClick = submitMessage,
+                onClick = submit,
                 enabled = state.isSending || state.chatInput.isNotBlank(),
                 modifier = Modifier.size(48.dp),
-                shape = RoundedCornerShape(20.dp),
+                shape = CircleShape,
+                contentPadding = PaddingValues(0.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (state.isSending) colors.buttonStop else colors.buttonSend,
-                    contentColor = Color.White,
-                    disabledContainerColor = colors.buttonDisabledBg,
-                    disabledContentColor = colors.buttonDisabledContent
-                ),
-                contentPadding = PaddingValues(0.dp)
+                    containerColor = if (state.isSending) {
+                        MaterialTheme.colorScheme.error
+                    } else MaterialTheme.colorScheme.primary
+                )
             ) {
                 Icon(
-                    imageVector = if (state.isSending) {
-                        Icons.Default.Stop
-                    } else {
-                        Icons.AutoMirrored.Filled.Send
-                    },
-                    contentDescription = if (state.isSending) "停止" else "发送",
+                    if (state.isSending) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send,
+                    contentDescription = if (state.isSending) "停止生成" else "发送消息",
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -311,192 +358,252 @@ private fun ComposerBar(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun EmptyState() {
-    val colors = LocalAppColors.current
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("有什么可以帮忙的？", style = MaterialTheme.typography.headlineMedium)
-        Text(
-            text = "左上角打开侧边栏进入设置，连接局域网模型服务后即可开始对话。",
-            textAlign = TextAlign.Center,
-            color = colors.textSecondary,
-            modifier = Modifier.padding(top = 10.dp)
-        )
-    }
-}
-
-@Composable
-private fun MessageBubble(message: ChatMessageUi) {
+private fun MessageBlock(message: ChatMessageUi) {
     val isUser = message.role == "user"
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    val showActions = message.content.isNotBlank() && !message.isStreaming
-    val onCopy = {
+    val copy = {
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         copyMessage(context, message.content)
     }
-
     Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
-        if (isUser) {
-            UserBubble(message = message)
-        } else {
-            AssistantContent(message = message)
-        }
-        if (showActions) {
-            MessageActions(onCopy = onCopy)
-        }
-    }
-}
-
-@Composable
-private fun UserBubble(message: ChatMessageUi) {
-    val colors = LocalAppColors.current
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = colors.bubbleUser,
-        tonalElevation = 0.dp,
-        modifier = Modifier.widthIn(max = 300.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+        Box(
+            modifier = Modifier
+                .then(if (isUser) Modifier.widthIn(max = 320.dp) else Modifier.fillMaxWidth())
+                .combinedClickable(onClick = {}, onLongClick = copy)
         ) {
-            MarkdownText(
-                markdown = message.content.ifBlank { "暂无内容" },
-                isUser = true
-            )
-            message.errorText?.let {
-                Text(text = it, color = MaterialTheme.colorScheme.error)
+            if (isUser) UserMessage(message) else AssistantMessage(message)
+            if (message.content.isNotBlank() && !message.isStreaming) {
+                CopyButton(onClick = copy, modifier = Modifier.align(Alignment.TopEnd))
             }
         }
     }
 }
 
 @Composable
-private fun AssistantContent(message: ChatMessageUi) {
+private fun UserMessage(message: ChatMessageUi) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        MessageText(
+            message = message,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.padding(start = 14.dp, top = 11.dp, end = 48.dp, bottom = 11.dp)
+        )
+    }
+}
+
+@Composable
+private fun AssistantMessage(message: ChatMessageUi) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 2.dp),
+            .padding(start = 2.dp, end = 46.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         if (message.isStreaming && message.content.isBlank()) {
             ThreeDotLoading()
         } else {
-            MarkdownText(
-                markdown = message.content.ifBlank { "暂无内容" },
-                isUser = false
-            )
-            if (message.isStreaming && message.content.isNotBlank()) {
-                BlinkingCursor()
+            MessageText(message, MaterialTheme.colorScheme.onSurface)
+            if (message.isStreaming) BlinkingCursor()
+        }
+    }
+}
+
+@Composable
+private fun MessageText(
+    message: ChatMessageUi,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        SelectionContainer {
+            if (message.isStreaming) {
+                Text(
+                    message.content.ifBlank { "暂无内容" },
+                    color = color,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            } else {
+                MarkdownText(message.content.ifBlank { "暂无内容" }, color)
             }
         }
-        message.errorText?.let {
-            Text(text = it, color = MaterialTheme.colorScheme.error)
+        message.errorText?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    }
+}
+
+@Composable
+private fun CopyButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    IconButton(
+        onClick = onClick,
+        modifier = modifier.size(48.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.94f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Outlined.ContentCopy,
+                contentDescription = "复制消息",
+                modifier = Modifier.size(16.dp)
+            )
         }
     }
 }
 
 @Composable
-private fun MessageActions(onCopy: () -> Unit) {
-    val colors = LocalAppColors.current
-    IconButton(
-        onClick = onCopy,
-        modifier = Modifier.size(32.dp)
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.ContentCopy,
-            contentDescription = "复制",
-            modifier = Modifier.size(16.dp),
-            tint = colors.iconCopyBorder
-        )
-    }
-}
-
-@Composable
-private fun ThreeDotLoading() {
-    val transition = rememberInfiniteTransition(label = "dots")
-    val dotCount by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 4f,
-        animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Restart),
-        label = "dotCount"
-    )
-    val dots = ".".repeat(dotCount.toInt().coerceIn(0, 3))
-    Text(
-        text = "生成中$dots",
-        color = LocalAppColors.current.textTertiary,
-        style = MaterialTheme.typography.bodyMedium
-    )
-}
-
-@Composable
-private fun BlinkingCursor() {
-    val transition = rememberInfiniteTransition(label = "cursor")
-    val cursorAlpha by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(tween(500), RepeatMode.Reverse),
-        label = "cursorAlpha"
-    )
-    Text(
-        text = "▌",
-        modifier = Modifier.alpha(cursorAlpha),
-        color = LocalAppColors.current.textPrimary,
-        fontSize = 16.sp
-    )
-}
-
-@Composable
-private fun MarkdownText(markdown: String, isUser: Boolean) {
-    val colors = LocalAppColors.current
+private fun MarkdownText(markdown: String, color: Color) {
     val context = LocalContext.current
     val markwon = remember(context) {
         Markwon.builder(context)
             .usePlugin(MarkwonInlineParserPlugin.create())
-            .usePlugin(JLatexMathPlugin.create(44f) { builder ->
-                builder.inlinesEnabled(true)
-            })
+            .usePlugin(JLatexMathPlugin.create(44f) { it.inlinesEnabled(true) })
             .build()
     }
-    val textColorInt = if (isUser) colors.bubbleUserText.toArgb() else colors.bubbleAssistantText.toArgb()
-
+    val colorInt = color.toArgb()
     AndroidView(
         factory = { ctx ->
             TextView(ctx).apply {
-                setTextColor(textColorInt)
+                setTextColor(colorInt)
                 textSize = 16f
                 setLineSpacing(0f, 1.4f)
                 includeFontPadding = false
             }
         },
-        update = { textView ->
-            textView.setTextColor(textColorInt)
-            markwon.setMarkdown(textView, normalizeMarkdown(markdown))
+        update = { view ->
+            view.setTextColor(colorInt)
+            markwon.setMarkdown(view, normalizeMarkdown(markdown))
         },
         modifier = Modifier.fillMaxWidth()
     )
 }
 
 @Composable
-private fun ghostButtonColors() = run {
-    val colors = LocalAppColors.current
-    ButtonDefaults.buttonColors(
-        containerColor = colors.surfaceOverlay,
-        contentColor = colors.textOnButton,
-        disabledContainerColor = colors.surfaceOverlayDisabled,
-        disabledContentColor = colors.textOnButton
+private fun GeneratingDot() {
+    val transition = rememberInfiniteTransition(label = "generating")
+    val alpha by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
+        label = "generatingAlpha"
     )
+    Box(
+        modifier = Modifier
+            .padding(end = 6.dp)
+            .size(7.dp)
+            .alpha(alpha)
+            .background(MaterialTheme.colorScheme.primary, CircleShape)
+    )
+}
+
+@Composable
+private fun ThreeDotLoading() {
+    val transition = rememberInfiniteTransition(label = "loading")
+    val count by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 4f,
+        animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Restart),
+        label = "loadingDots"
+    )
+    Text(
+        "生成中${".".repeat(count.toInt().coerceIn(0, 3))}",
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun BlinkingCursor() {
+    val transition = rememberInfiniteTransition(label = "cursor")
+    val alpha by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(tween(500), RepeatMode.Reverse),
+        label = "cursorAlpha"
+    )
+    Text("▌", modifier = Modifier.alpha(alpha), color = MaterialTheme.colorScheme.primary)
+}
+
+@Composable
+private fun rememberAutoScrollController(listState: LazyListState): AutoScrollController {
+    val scope = rememberCoroutineScope()
+    val controller = remember(listState, scope) { AutoScrollController(listState, scope) }
+    DisposableEffect(controller) { onDispose(controller::dispose) }
+    return controller
+}
+
+private class AutoScrollController(
+    private val listState: LazyListState,
+    private val scope: CoroutineScope
+) {
+    private val requests = Channel<Int>(capacity = Channel.CONFLATED)
+    private val worker = scope.launch {
+        for (targetIndex in requests) listState.animateToBottom(targetIndex)
+    }
+
+    fun request(targetIndex: Int) {
+        requests.trySend(targetIndex)
+    }
+
+    fun cancelForUser() {
+        while (requests.tryReceive().isSuccess) Unit
+        scope.launch { listState.scroll(MutatePriority.UserInput) {} }
+    }
+
+    fun dispose() {
+        requests.close()
+        worker.cancel()
+    }
+}
+
+private suspend fun LazyListState.animateToBottom(targetIndex: Int) {
+    repeat(4) {
+        val info = layoutInfo
+        val visible = info.visibleItemsInfo
+        if (visible.isEmpty()) return scrollToItem(targetIndex)
+        val target = visible.firstOrNull { it.index == targetIndex }
+        val distance = if (target != null) {
+            target.offset + target.size - info.viewportEndOffset
+        } else {
+            estimateDistanceTo(targetIndex, visible, info.viewportEndOffset - info.viewportStartOffset)
+        }
+        if (abs(distance) <= 1) return
+        animateScrollBy(
+            value = distance.toFloat(),
+            animationSpec = tween(AUTO_SCROLL_DURATION_MS, easing = FastOutSlowInEasing)
+        )
+    }
+}
+
+private fun estimateDistanceTo(
+    targetIndex: Int,
+    visible: List<androidx.compose.foundation.lazy.LazyListItemInfo>,
+    viewportSize: Int
+): Int {
+    val averageSize = visible.map { it.size }.average().toInt().coerceAtLeast(1)
+    val first = visible.first()
+    val last = visible.last()
+    return when {
+        targetIndex > last.index -> {
+            val itemsAway = targetIndex - last.index
+            (itemsAway * averageSize).coerceAtLeast((viewportSize * 0.8f).toInt())
+        }
+        targetIndex < first.index -> -((first.index - targetIndex) * averageSize)
+        else -> 0
+    }
+}
+
+private fun LazyListState.isAtBottom(anchorIndex: Int): Boolean {
+    if (layoutInfo.totalItemsCount == 0) return true
+    val anchor = layoutInfo.visibleItemsInfo.firstOrNull { it.index == anchorIndex } ?: return false
+    return anchor.offset + anchor.size <= layoutInfo.viewportEndOffset + 2
 }
 
 private fun copyMessage(context: Context, content: String) {
@@ -504,74 +611,4 @@ private fun copyMessage(context: Context, content: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     clipboard.setPrimaryClip(ClipData.newPlainText("chat_message", content))
     showAppToast(context, "已复制")
-}
-
-private enum class HeaderTone { Idle, Generating, Normal, Error }
-
-private data class HeaderStatus(val text: String, val tone: HeaderTone)
-
-private fun resolveHeaderStatus(state: LunaDeskUiState): HeaderStatus {
-    val status = state.connectionStatus
-    val isError = status != null && (status.contains("失败") || status.contains("错误"))
-    return when {
-        state.isSending -> HeaderStatus("生成中", HeaderTone.Generating)
-        isError -> HeaderStatus(status!!, HeaderTone.Error)
-        state.selectedModel.isNotBlank() -> HeaderStatus(state.selectedModel, HeaderTone.Normal)
-        !status.isNullOrBlank() -> HeaderStatus(status, HeaderTone.Normal)
-        else -> HeaderStatus("", HeaderTone.Idle)
-    }
-}
-
-@Composable
-private fun HeaderStatusPill(status: HeaderStatus, modifier: Modifier = Modifier) {
-    val colors = LocalAppColors.current
-    val (bg, fg) = when (status.tone) {
-        HeaderTone.Generating -> colors.surfaceOverlay to colors.textAccent
-        HeaderTone.Error -> colors.noticeBg to colors.noticeText
-        HeaderTone.Normal -> colors.surfaceOverlay to colors.textPrimary
-        HeaderTone.Idle -> Color.Transparent to Color.Transparent
-    }
-
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
-        color = bg
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (status.tone == HeaderTone.Generating) {
-                PulsingDot(color = fg)
-                Spacer(modifier = Modifier.width(8.dp))
-            }
-            Text(
-                text = status.text,
-                color = fg,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (status.tone == HeaderTone.Normal) FontWeight.SemiBold else FontWeight.Normal,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-@Composable
-private fun PulsingDot(color: Color) {
-    val transition = rememberInfiniteTransition(label = "pulse")
-    val scale by transition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
-        label = "pulseScale"
-    )
-    Box(
-        modifier = Modifier
-            .size(8.dp)
-            .alpha(scale)
-            .background(color, RoundedCornerShape(4.dp))
-    )
 }
