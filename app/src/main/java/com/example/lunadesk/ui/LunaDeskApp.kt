@@ -1,21 +1,39 @@
 package com.example.lunadesk.ui
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,17 +43,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.lunadesk.ui.screen.chat.ChatScreen
-import com.example.lunadesk.ui.screen.settings.SettingsScreen
+import com.example.lunadesk.data.local.ApiProfile
 import com.example.lunadesk.ui.components.showAppToast
-import com.example.lunadesk.ui.theme.LocalAppColors
+import com.example.lunadesk.ui.screen.chat.ChatScreen
+import com.example.lunadesk.ui.screen.settings.SettingsActions
+import com.example.lunadesk.ui.screen.settings.SettingsScreen
 import kotlinx.coroutines.launch
 
 @Composable
@@ -43,7 +62,6 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
     val state by viewModel.uiState.collectAsState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    val colors = LocalAppColors.current
     val context = LocalContext.current
     var activeToast by remember { mutableStateOf<android.widget.Toast?>(null) }
 
@@ -57,11 +75,19 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
-                modifier = Modifier.fillMaxHeight().fillMaxWidth(0.82f),
-                drawerContainerColor = colors.drawerBg
+                modifier = Modifier.fillMaxHeight().fillMaxWidth(0.86f),
+                drawerContainerColor = MaterialTheme.colorScheme.surface
             ) {
                 DrawerContent(
                     state = state,
+                    onSelectProfile = { id ->
+                        viewModel.requestActivateProfile(id)
+                        scope.launch { drawerState.close() }
+                    },
+                    onCreateProfile = {
+                        viewModel.requestCreateProfile()
+                        scope.launch { drawerState.close() }
+                    },
                     onNavigate = { tab ->
                         viewModel.switchTab(tab)
                         scope.launch { drawerState.close() }
@@ -73,19 +99,10 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            colors.gradientStart,
-                            colors.gradientMiddle,
-                            colors.gradientEnd
-                        )
-                    )
-                )
+                .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             when (state.currentTab) {
                 AppTab.Chat -> ChatScreen(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                     state = state,
                     onOpenMenu = { scope.launch { drawerState.open() } },
                     onInputChange = viewModel::updateChatInput,
@@ -93,77 +110,151 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
                     onStop = viewModel::stopStreaming,
                     onReset = viewModel::resetConversation
                 )
-
                 AppTab.Settings -> SettingsScreen(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                     state = state,
-                    onBack = { viewModel.switchTab(AppTab.Chat) },
-                    onBaseUrlChange = viewModel::updateBaseUrl,
-                    onApiKeyChange = viewModel::updateApiKey,
-                    onTemperatureChange = viewModel::updateTemperature,
-                    onMaxTokensChange = viewModel::updateMaxTokens,
-                    onSave = viewModel::saveSettings,
-                    onTestConnection = viewModel::testConnection,
-                    onRefreshModels = viewModel::refreshModels,
-                    onSwitchModel = viewModel::switchModel,
-                    onModelSearchChange = viewModel::updateModelSearch
+                    actions = SettingsActions(
+                        onBack = { viewModel.switchTab(AppTab.Chat) },
+                        onCreate = viewModel::requestCreateProfile,
+                        onEdit = viewModel::requestEditProfile,
+                        onCloseEditor = viewModel::requestCloseEditor,
+                        onActivate = viewModel::requestActivateProfile,
+                        onDelete = viewModel::requestDeleteProfile,
+                        onNameChange = viewModel::updateProfileName,
+                        onBaseUrlChange = viewModel::updateBaseUrl,
+                        onApiKeyChange = viewModel::updateApiKey,
+                        onTemperatureChange = viewModel::updateTemperature,
+                        onMaxTokensChange = viewModel::updateMaxTokens,
+                        onModelChange = viewModel::updateSelectedModel,
+                        onSave = viewModel::saveProfile,
+                        onTestConnection = viewModel::testConnection,
+                        onRefreshModels = viewModel::refreshModels,
+                        onSwitchModel = viewModel::switchModel,
+                        onModelSearchChange = viewModel::updateModelSearch
+                    )
                 )
             }
         }
     }
+    PendingActionDialog(
+        action = state.pendingAction,
+        onConfirm = viewModel::confirmPendingAction,
+        onDismiss = viewModel::cancelPendingAction
+    )
 }
 
 @Composable
 private fun DrawerContent(
     state: LunaDeskUiState,
+    onSelectProfile: (String) -> Unit,
+    onCreateProfile: () -> Unit,
     onNavigate: (AppTab) -> Unit
 ) {
-    val colors = LocalAppColors.current
-    Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 28.dp)) {
-        Text(
-            text = "LunaDesk",
-            color = colors.textPrimary,
-            fontWeight = FontWeight.SemiBold
-        )
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 10.dp, bottom = 18.dp),
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = colors.drawerCardBg)
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-                Text(
-                    text = "当前模型",
-                    color = colors.textTertiary
-                )
-                Text(
-                    text = state.selectedModel.ifBlank { "未选择模型" },
-                    color = colors.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "LunaDesk",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            IconButton(onClick = onCreateProfile) {
+                Icon(Icons.Default.Add, contentDescription = "新增 API 配置")
             }
         }
         NavigationDrawerItem(
             label = { Text("聊天") },
+            icon = { Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null) },
             selected = state.currentTab == AppTab.Chat,
             onClick = { onNavigate(AppTab.Chat) },
-            colors = NavigationDrawerItemDefaults.colors(
-                selectedContainerColor = colors.drawerSelectedItem,
-                unselectedContainerColor = Color.Transparent
-            )
+            modifier = Modifier.padding(top = 12.dp),
+            colors = drawerItemColors()
         )
+        Text(
+            "API 配置",
+            modifier = Modifier.padding(start = 12.dp, top = 22.dp, bottom = 8.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            items(state.profiles, key = { it.id }) { profile ->
+                DrawerProfileItem(
+                    profile = profile,
+                    selected = profile.id == state.activeProfileId,
+                    onClick = { onSelectProfile(profile.id) }
+                )
+            }
+        }
         NavigationDrawerItem(
-            label = { Text("设置") },
+            label = { Text("管理 API 配置") },
+            icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
             selected = state.currentTab == AppTab.Settings,
             onClick = { onNavigate(AppTab.Settings) },
-            colors = NavigationDrawerItemDefaults.colors(
-                selectedContainerColor = colors.drawerSelectedItem,
-                unselectedContainerColor = Color.Transparent
-            ),
-            modifier = Modifier.padding(top = 8.dp)
+            colors = drawerItemColors()
         )
     }
+}
+
+@Composable
+private fun DrawerProfileItem(profile: ApiProfile, selected: Boolean, onClick: () -> Unit) {
+    NavigationDrawerItem(
+        label = {
+            Column {
+                Text(profile.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    profile.selectedModel.ifBlank { "未选择模型" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        },
+        badge = {
+            if (selected) {
+                Icon(Icons.Default.Check, contentDescription = "当前配置", modifier = Modifier.size(18.dp))
+            }
+        },
+        selected = selected,
+        onClick = onClick,
+        colors = drawerItemColors()
+    )
+}
+
+@Composable
+private fun drawerItemColors() = NavigationDrawerItemDefaults.colors(
+    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+    unselectedContainerColor = Color.Transparent
+)
+
+@Composable
+private fun PendingActionDialog(
+    action: PendingProfileAction?,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (action == null) return
+    val deleting = action is PendingProfileAction.DeleteProfile
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (deleting) "删除这套配置？" else "放弃未保存修改？") },
+        text = {
+            Text(
+                if (deleting) "删除后无法恢复；如果删除当前配置，将自动切换到其他配置。"
+                else "当前编辑内容尚未保存，继续操作会丢失这些修改。"
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    if (deleting) "删除" else "放弃修改",
+                    color = if (deleting) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary
+                )
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
 }

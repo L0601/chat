@@ -9,7 +9,10 @@ class LunaDeskViewModelFactory(
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        return LunaDeskViewModel(container) as T
+        return LunaDeskViewModel(
+            profileStore = container.profileStore,
+            chatService = container.chatService,
+            idGenerator = container.idGenerator
+        ) as T
     }
 }
-

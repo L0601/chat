@@ -3,9 +3,11 @@ package com.example.lunadesk.ui.screen.settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,357 +26,310 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.lunadesk.R
+import com.example.lunadesk.BuildConfig
+import com.example.lunadesk.data.local.ApiProfile
 import com.example.lunadesk.data.model.ModelInfo
 import com.example.lunadesk.ui.LunaDeskUiState
-import com.example.lunadesk.ui.theme.LocalAppColors
+import com.example.lunadesk.ui.ProfileDraft
+
+data class SettingsActions(
+    val onBack: () -> Unit,
+    val onCreate: () -> Unit,
+    val onEdit: (String) -> Unit,
+    val onCloseEditor: () -> Unit,
+    val onActivate: (String) -> Unit,
+    val onDelete: (String) -> Unit,
+    val onNameChange: (String) -> Unit,
+    val onBaseUrlChange: (String) -> Unit,
+    val onApiKeyChange: (String) -> Unit,
+    val onTemperatureChange: (String) -> Unit,
+    val onMaxTokensChange: (String) -> Unit,
+    val onModelChange: (String) -> Unit,
+    val onSave: () -> Unit,
+    val onTestConnection: () -> Unit,
+    val onRefreshModels: () -> Unit,
+    val onSwitchModel: (String) -> Unit,
+    val onModelSearchChange: (String) -> Unit
+)
 
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
     state: LunaDeskUiState,
-    onBack: () -> Unit,
-    onBaseUrlChange: (String) -> Unit,
-    onApiKeyChange: (String) -> Unit,
-    onTemperatureChange: (String) -> Unit,
-    onMaxTokensChange: (String) -> Unit,
-    onSave: () -> Unit,
-    onTestConnection: () -> Unit,
-    onRefreshModels: () -> Unit,
-    onSwitchModel: (String) -> Unit,
-    onModelSearchChange: (String) -> Unit = {}
+    actions: SettingsActions
 ) {
-    val filteredModels = if (state.modelSearchQuery.isBlank()) {
-        state.models
-    } else {
-        state.models.filter { it.id.contains(state.modelSearchQuery, ignoreCase = true) }
-    }
-
+    val draft = state.editorDraft
     Column(
         modifier = modifier
             .fillMaxSize()
             .statusBarsPadding()
-            .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime)),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
     ) {
-        Header(onBack = onBack)
-
-        SectionHeader(title = "服务配置")
-
-        ConfigCard(
-            state = state,
-            onBaseUrlChange = onBaseUrlChange,
-            onApiKeyChange = onApiKeyChange,
-            onTemperatureChange = onTemperatureChange,
-            onMaxTokensChange = onMaxTokensChange,
-            onSave = onSave,
-            onTestConnection = onTestConnection,
-            onRefreshModels = onRefreshModels
+        SettingsHeader(
+            title = when {
+                draft?.isNew == true -> "新增配置"
+                draft != null -> "编辑配置"
+                else -> "API 配置"
+            },
+            onBack = if (draft == null) actions.onBack else actions.onCloseEditor
         )
-
-        SectionHeader(
-            title = stringResource(R.string.settings_model_list),
-            trailing = stringResource(R.string.settings_model_count, filteredModels.size)
-        )
-
-        ModelListCard(
-            modifier = Modifier.weight(1f),
-            state = state,
-            filteredModels = filteredModels,
-            onSwitchModel = onSwitchModel,
-            onModelSearchChange = onModelSearchChange
-        )
-    }
-}
-
-@Composable
-private fun Header(onBack: () -> Unit) {
-    val colors = LocalAppColors.current
-    Box(
-        modifier = Modifier.fillMaxWidth(),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = stringResource(R.string.settings_title),
-            style = MaterialTheme.typography.titleLarge,
-            color = colors.textPrimary
-        )
-        Row(modifier = Modifier.fillMaxWidth()) {
-            Button(
-                onClick = onBack,
-                modifier = Modifier.size(44.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = lightButtonColors(),
-                contentPadding = PaddingValues(0.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = stringResource(R.string.settings_back),
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+        if (draft == null) {
+            ProfileList(
+                modifier = Modifier.weight(1f),
+                state = state,
+                actions = actions
+            )
+        } else {
+            ProfileEditor(
+                modifier = Modifier.weight(1f),
+                state = state,
+                draft = draft,
+                actions = actions
+            )
         }
     }
 }
 
 @Composable
-private fun SectionHeader(title: String, trailing: String? = null) {
-    val colors = LocalAppColors.current
-    Row(
+private fun SettingsHeader(title: String, onBack: () -> Unit) {
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .height(56.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+        }
+        Text(text = title, style = MaterialTheme.typography.titleLarge)
+    }
+}
+
+@Composable
+private fun ProfileList(
+    modifier: Modifier,
+    state: LunaDeskUiState,
+    actions: SettingsActions
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("服务配置", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "每套配置独立保存地址、密钥、模型和生成参数",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                FilledTonalButton(onClick = actions.onCreate) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text("新增", modifier = Modifier.padding(start = 6.dp))
+                }
+            }
+        }
+        items(state.profiles, key = { it.id }) { profile ->
+            ProfileCard(
+                profile = profile,
+                isActive = profile.id == state.activeProfileId,
+                canDelete = state.profiles.size > 1,
+                onEdit = { actions.onEdit(profile.id) },
+                onActivate = { actions.onActivate(profile.id) },
+                onDelete = { actions.onDelete(profile.id) }
+            )
+        }
+        item {
+            Text(
+                text = "LunaDesk v${BuildConfig.VERSION_NAME}",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileCard(
+    profile: ApiProfile,
+    isActive: Boolean,
+    canDelete: Boolean,
+    onEdit: () -> Unit,
+    onActivate: () -> Unit,
+    onDelete: () -> Unit
+) {
+    OutlinedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onEdit)
+            .semantics { role = Role.Button },
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = if (isActive) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+            } else MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 18.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(profile.name, style = MaterialTheme.typography.titleMedium)
+                    if (isActive) ActiveLabel()
+                }
+                Text(
+                    profile.baseUrl.ifBlank { "尚未填写服务地址" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    profile.selectedModel.ifBlank { "尚未选择模型" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (!isActive) {
+                TextButton(onClick = onActivate) { Text("设为当前") }
+            }
+            IconButton(onClick = onEdit) {
+                Icon(Icons.Outlined.Edit, contentDescription = "编辑 ${profile.name}")
+            }
+            IconButton(onClick = onDelete, enabled = canDelete) {
+                Icon(Icons.Outlined.Delete, contentDescription = "删除 ${profile.name}")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActiveLabel() {
+    Row(
+        modifier = Modifier.padding(start = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = colors.textPrimary,
-            fontWeight = FontWeight.SemiBold
+        Icon(
+            Icons.Default.Check,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = MaterialTheme.colorScheme.primary
         )
-        trailing?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.textTertiary
-            )
-        }
+        Text(
+            "当前",
+            modifier = Modifier.padding(start = 2.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
     }
 }
 
 @Composable
-private fun ConfigCard(
+private fun ProfileEditor(
+    modifier: Modifier,
     state: LunaDeskUiState,
-    onBaseUrlChange: (String) -> Unit,
-    onApiKeyChange: (String) -> Unit,
-    onTemperatureChange: (String) -> Unit,
-    onMaxTokensChange: (String) -> Unit,
-    onSave: () -> Unit,
-    onTestConnection: () -> Unit,
-    onRefreshModels: () -> Unit
+    draft: ProfileDraft,
+    actions: SettingsActions
 ) {
-    val colors = LocalAppColors.current
-    val tempFloat = state.temperatureInput.toFloatOrNull()
-    val tempError = tempFloat != null && (tempFloat < 0f || tempFloat > 2f)
-            || (state.temperatureInput.isNotBlank() && tempFloat == null)
-    val maxInt = state.maxTokensInput.toIntOrNull()
-    val maxError = maxInt != null && (maxInt < 1 || maxInt > 200000)
-            || (state.maxTokensInput.isNotBlank() && maxInt == null)
-
-    Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.configCardBg)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            OutlinedTextField(
-                value = state.baseUrl,
-                onValueChange = onBaseUrlChange,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text(stringResource(R.string.settings_base_url_label)) },
-                placeholder = { Text(stringResource(R.string.settings_base_url_placeholder)) },
-                leadingIcon = {
-                    Icon(Icons.Outlined.Link, contentDescription = null, modifier = Modifier.size(20.dp))
-                },
-                shape = RoundedCornerShape(14.dp)
-            )
-            OutlinedTextField(
-                value = state.apiKey,
-                onValueChange = onApiKeyChange,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text(stringResource(R.string.settings_api_key_label)) },
-                placeholder = { Text(stringResource(R.string.settings_api_key_placeholder)) },
-                leadingIcon = {
-                    Icon(Icons.Outlined.VpnKey, contentDescription = null, modifier = Modifier.size(20.dp))
-                },
-                shape = RoundedCornerShape(14.dp)
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                OutlinedTextField(
-                    value = state.temperatureInput,
-                    onValueChange = onTemperatureChange,
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.settings_temperature_label)) },
-                    isError = tempError,
-                    supportingText = if (tempError) {
-                        { Text("范围 0 ~ 2") }
-                    } else null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    shape = RoundedCornerShape(14.dp)
-                )
-                OutlinedTextField(
-                    value = state.maxTokensInput,
-                    onValueChange = onMaxTokensChange,
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.settings_max_tokens_label)) },
-                    isError = maxError,
-                    supportingText = if (maxError) {
-                        { Text("范围 1 ~ 200000") }
-                    } else null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    shape = RoundedCornerShape(14.dp)
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Button(
-                    onClick = onSave,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(stringResource(R.string.settings_save), maxLines = 1)
-                }
-                FilledTonalButton(
-                    onClick = onTestConnection,
-                    enabled = !state.isTestingConnection,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        stringResource(
-                            if (state.isTestingConnection) R.string.settings_testing
-                            else R.string.settings_test
-                        ),
-                        maxLines = 1
-                    )
-                }
-            }
-            OutlinedButton(
-                onClick = onRefreshModels,
-                enabled = !state.isLoadingModels,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    stringResource(
-                        if (state.isLoadingModels) R.string.settings_loading_models
-                        else R.string.settings_select_model
-                    ),
-                    maxLines = 1
-                )
-            }
-        }
+    val models = remember(state.models, state.modelSearchQuery) {
+        if (state.modelSearchQuery.isBlank()) state.models
+        else state.models.filter { it.id.contains(state.modelSearchQuery, ignoreCase = true) }
     }
-}
-
-@Composable
-private fun ModelListCard(
-    modifier: Modifier = Modifier,
-    state: LunaDeskUiState,
-    filteredModels: List<ModelInfo>,
-    onSwitchModel: (String) -> Unit,
-    onModelSearchChange: (String) -> Unit
-) {
-    val colors = LocalAppColors.current
-    val focusManager = LocalFocusManager.current
-
-    Card(
+    LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.modelListCardBg)
+        contentPadding = PaddingValues(top = 12.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            if (state.models.isNotEmpty()) {
-                OutlinedTextField(
-                    value = state.modelSearchQuery,
-                    onValueChange = onModelSearchChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(14.dp),
-                    placeholder = { Text(stringResource(R.string.settings_search_model)) },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(20.dp))
-                    },
-                    keyboardOptions = KeyboardOptions(
-                        imeAction = ImeAction.Done,
-                        autoCorrect = false
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = { focusManager.clearFocus() }
-                    )
+        state.validationError?.let { error ->
+            item { ValidationNotice(error) }
+        }
+        item { ConnectionFields(draft, actions) }
+        item { GenerationFields(draft, actions) }
+        item {
+            EditorActions(
+                state = state,
+                onSave = actions.onSave,
+                onTest = actions.onTestConnection
+            )
+        }
+        item { ModelControls(draft, state, actions) }
+        if (models.isNotEmpty()) {
+            item {
+                Text(
+                    "可用模型 · ${models.size}",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
-            when {
-                state.models.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            stringResource(R.string.settings_empty_models),
-                            color = colors.textTertiary,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-                filteredModels.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            stringResource(R.string.settings_no_matching_models),
-                            color = colors.textTertiary,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth().weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        items(filteredModels, key = { it.id }) { model ->
-                            ModelRow(
-                                model = model,
-                                selected = model.id == state.selectedModel,
-                                onClick = { onSwitchModel(model.id) }
-                            )
-                        }
-                    }
+            items(models, key = { it.id }) { model ->
+                ModelRow(
+                    model = model,
+                    selected = model.id == draft.selectedModel,
+                    onClick = { actions.onSwitchModel(model.id) }
+                )
+            }
+        }
+        if (!draft.isNew) {
+            item {
+                TextButton(
+                    onClick = { actions.onDelete(draft.id) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("删除此配置", color = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -382,61 +337,207 @@ private fun ModelListCard(
 }
 
 @Composable
-private fun ModelRow(
-    model: ModelInfo,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val colors = LocalAppColors.current
-    val background = if (selected) colors.modelRowSelected else colors.modelRowUnselected
-
+private fun ValidationNotice(message: String) {
     Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Text(
+            text = message,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            color = MaterialTheme.colorScheme.onErrorContainer,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
+@Composable
+private fun ConnectionFields(draft: ProfileDraft, actions: SettingsActions) {
+    var showApiKey by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedTextField(
+            value = draft.name,
+            onValueChange = actions.onNameChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("配置名称 *") },
+            shape = RoundedCornerShape(16.dp)
+        )
+        OutlinedTextField(
+            value = draft.baseUrl,
+            onValueChange = actions.onBaseUrlChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("API 地址 *") },
+            placeholder = { Text("http://192.168.1.10:1234 或 https://host/v1") },
+            leadingIcon = { Icon(Icons.Outlined.Link, contentDescription = null) },
+            supportingText = { Text("兼容包含或不包含 /v1 的地址") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+            shape = RoundedCornerShape(16.dp)
+        )
+        OutlinedTextField(
+            value = draft.apiKey,
+            onValueChange = actions.onApiKeyChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("API Key（可选）") },
+            leadingIcon = { Icon(Icons.Outlined.VpnKey, contentDescription = null) },
+            trailingIcon = {
+                IconButton(onClick = { showApiKey = !showApiKey }) {
+                    Icon(
+                        if (showApiKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                        contentDescription = if (showApiKey) "隐藏 API Key" else "显示 API Key"
+                    )
+                }
+            },
+            visualTransformation = if (showApiKey) {
+                VisualTransformation.None
+            } else PasswordVisualTransformation(),
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+}
+
+@Composable
+private fun GenerationFields(draft: ProfileDraft, actions: SettingsActions) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val compact = maxWidth < 380.dp
+        val content: @Composable (Modifier) -> Unit = { modifier ->
+            OutlinedTextField(
+                value = draft.temperatureInput,
+                onValueChange = actions.onTemperatureChange,
+                modifier = modifier,
+                singleLine = true,
+                label = { Text("温度") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                supportingText = { Text("0–2") },
+                shape = RoundedCornerShape(16.dp)
+            )
+            OutlinedTextField(
+                value = draft.maxTokensInput,
+                onValueChange = actions.onMaxTokensChange,
+                modifier = modifier,
+                singleLine = true,
+                label = { Text("最大输出") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                supportingText = { Text("1–200000") },
+                shape = RoundedCornerShape(16.dp)
+            )
+        }
+        if (compact) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                content(Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                content(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditorActions(
+    state: LunaDeskUiState,
+    onSave: () -> Unit,
+    onTest: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Button(onClick = onSave, modifier = Modifier.weight(1f)) {
+            Text(if (state.hasUnsavedChanges) "保存配置" else "已保存")
+        }
+        OutlinedButton(
+            onClick = onTest,
+            enabled = !state.isTestingConnection,
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(if (state.isTestingConnection) "测试中…" else "测试连接")
+        }
+    }
+}
+
+@Composable
+private fun ModelControls(
+    draft: ProfileDraft,
+    state: LunaDeskUiState,
+    actions: SettingsActions
+) {
+    val focusManager = LocalFocusManager.current
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        OutlinedTextField(
+            value = draft.selectedModel,
+            onValueChange = actions.onModelChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("模型") },
+            placeholder = { Text("手动填写模型 ID") },
+            shape = RoundedCornerShape(16.dp)
+        )
+        OutlinedButton(
+            onClick = actions.onRefreshModels,
+            enabled = !state.isLoadingModels,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (state.isLoadingModels) "正在获取…" else "获取服务端模型")
+        }
+        if (state.models.isNotEmpty()) {
+            OutlinedTextField(
+                value = state.modelSearchQuery,
+                onValueChange = actions.onModelSearchChange,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                placeholder = { Text("搜索模型") },
+                keyboardOptions = KeyboardOptions(
+                    imeAction = ImeAction.Done,
+                    autoCorrectEnabled = false
+                ),
+                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                shape = RoundedCornerShape(16.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModelRow(model: ModelInfo, selected: Boolean, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !selected, onClick = onClick),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = background),
-        modifier = Modifier.clickable(enabled = !selected, onClick = onClick)
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+        )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
+                .height(52.dp)
                 .padding(horizontal = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (selected) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = colors.modelStatusText
-                )
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.size(8.dp))
             }
             Text(
-                text = model.id,
+                model.id,
                 modifier = Modifier.weight(1f),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyLarge
+                overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = stringResource(
-                    if (selected) R.string.settings_model_current
-                    else R.string.settings_model_pending
-                ),
-                color = colors.modelStatusText,
-                style = MaterialTheme.typography.labelMedium
+                if (selected) "已选择" else "选择",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
             )
         }
     }
-}
-
-@Composable
-private fun lightButtonColors() = run {
-    val colors = LocalAppColors.current
-    ButtonDefaults.buttonColors(
-        containerColor = colors.surfaceOverlay,
-        contentColor = colors.textOnButton,
-        disabledContainerColor = colors.surfaceOverlayDisabled,
-        disabledContentColor = colors.textOnButton
-    )
 }

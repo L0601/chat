@@ -31,13 +31,13 @@ import kotlin.coroutines.resumeWithException
 class LmStudioRepository(
     private val client: OkHttpClient,
     private val json: Json = Json { ignoreUnknownKeys = true }
-) {
+) : OpenAiCompatibleService {
     @Volatile
     private var activeChatCall: Call? = null
 
-    suspend fun testConnection(baseUrl: String, apiKey: String = ""): Int {
+    override suspend fun testConnection(baseUrl: String, apiKey: String): Int {
         val request = Request.Builder()
-            .url("${normalizeBaseUrl(baseUrl)}/v1/models")
+            .url(buildOpenAiEndpoint(baseUrl, "models"))
             .get()
             .withAuth(apiKey)
             .build()
@@ -45,9 +45,9 @@ class LmStudioRepository(
         return execute(request) { 200 }
     }
 
-    suspend fun fetchModels(baseUrl: String, apiKey: String = ""): List<ModelInfo> {
+    override suspend fun fetchModels(baseUrl: String, apiKey: String): List<ModelInfo> {
         val request = Request.Builder()
-            .url("${normalizeBaseUrl(baseUrl)}/v1/models")
+            .url(buildOpenAiEndpoint(baseUrl, "models"))
             .get()
             .withAuth(apiKey)
             .build()
@@ -70,7 +70,11 @@ class LmStudioRepository(
         execute(request) { }
     }
 
-    fun streamChat(baseUrl: String, requestModel: ChatCompletionRequest, apiKey: String = ""): Flow<StreamChunk> {
+    override fun streamChat(
+        baseUrl: String,
+        requestModel: ChatCompletionRequest,
+        apiKey: String
+    ): Flow<StreamChunk> {
         return callbackFlow {
             val streamJob = launch(Dispatchers.IO) {
                 var emittedContent = false
@@ -155,7 +159,7 @@ class LmStudioRepository(
         }
     }
 
-    fun cancelActiveChat() {
+    override fun cancelActiveChat() {
         activeChatCall?.cancel()
         activeChatCall = null
     }
@@ -204,7 +208,7 @@ class LmStudioRepository(
     private fun buildChatRequest(baseUrl: String, requestModel: ChatCompletionRequest, apiKey: String = ""): Request {
         val body = json.encodeToString(requestModel).toRequestBody(JSON)
         return Request.Builder()
-            .url("${normalizeBaseUrl(baseUrl)}/v1/chat/completions")
+            .url(buildOpenAiEndpoint(baseUrl, "chat/completions"))
             .post(body)
             .header("Accept", "text/event-stream")
             .withAuth(apiKey)
@@ -257,4 +261,10 @@ class LmStudioRepository(
     companion object {
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }
+}
+
+internal fun buildOpenAiEndpoint(baseUrl: String, path: String): String {
+    val root = baseUrl.trim().trimEnd('/')
+    val versionedRoot = if (root.endsWith("/v1", ignoreCase = true)) root else "$root/v1"
+    return "$versionedRoot/${path.trimStart('/')}"
 }
