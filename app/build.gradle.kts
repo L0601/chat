@@ -9,27 +9,28 @@ import java.util.Properties
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-val signingProperties = Properties().apply {
+val releaseSigningProperties = Properties().apply {
     val file = rootProject.file("key.properties")
     if (file.exists()) {
         file.inputStream().use(::load)
     }
 }
-fun signingValue(propertyName: String, environmentName: String): String? {
-    return signingProperties.getProperty(propertyName)?.takeIf { it.isNotBlank() }
+fun releaseSigningValue(propertyName: String, environmentName: String): String? {
+    return releaseSigningProperties.getProperty(propertyName)?.takeIf { it.isNotBlank() }
         ?: providers.environmentVariable(environmentName).orNull?.takeIf { it.isNotBlank() }
 }
 
-val signingStoreFile = signingValue("storeFile", "LUNADESK_KEYSTORE_PATH")
-val signingStorePassword = signingValue("storePassword", "LUNADESK_STORE_PASSWORD")
-val signingKeyAlias = signingValue("keyAlias", "LUNADESK_KEY_ALIAS")
-val signingKeyPassword = signingValue("keyPassword", "LUNADESK_KEY_PASSWORD")
-val hasStableSigning = listOf(
-    signingStoreFile,
-    signingStorePassword,
-    signingKeyAlias,
-    signingKeyPassword
+val releaseSigningStoreFile = releaseSigningValue("storeFile", "LUNADESK_KEYSTORE_PATH")
+val releaseSigningStorePassword = releaseSigningValue("storePassword", "LUNADESK_STORE_PASSWORD")
+val releaseSigningKeyAlias = releaseSigningValue("keyAlias", "LUNADESK_KEY_ALIAS")
+val releaseSigningKeyPassword = releaseSigningValue("keyPassword", "LUNADESK_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseSigningStoreFile,
+    releaseSigningStorePassword,
+    releaseSigningKeyAlias,
+    releaseSigningKeyPassword
 ).all { !it.isNullOrBlank() }
+val debugKeystoreFile = rootProject.file("keystore/lunadesk-debug.keystore")
 val buildTag = providers.environmentVariable("LUNADESK_BUILD_TAG").orNull
     ?: LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmm"))
 
@@ -51,16 +52,31 @@ android {
         }
     }
 
+    signingConfigs {
+        getByName("debug") {
+            storeFile = debugKeystoreFile
+            storePassword = "lunadeskdebug"
+            keyAlias = "lunadesk-debug"
+            keyPassword = "lunadeskdebug"
+        }
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(releaseSigningStoreFile!!)
+                storePassword = releaseSigningStorePassword
+                keyAlias = releaseSigningKeyAlias
+                keyPassword = releaseSigningKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
-            if (hasStableSigning) {
-                signingConfig = signingConfigs.getByName("debug")
-            }
+            signingConfig = signingConfigs.getByName("debug")
         }
         release {
             isMinifyEnabled = false
-            if (hasStableSigning) {
-                signingConfig = signingConfigs.getByName("debug")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
             }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -88,27 +104,18 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
-
-    signingConfigs {
-        if (hasStableSigning) {
-            getByName("debug") {
-                storeFile = rootProject.file(signingStoreFile!!)
-                storePassword = signingStorePassword
-                keyAlias = signingKeyAlias
-                keyPassword = signingKeyPassword
-            }
-        }
-    }
 }
 
-val stableSigningRequired = gradle.startParameter.taskNames.any { taskName ->
-    listOf("assemble", "bundle", "package", "install").any {
-        taskName.contains(it, ignoreCase = true)
-    }
+val releaseSigningRequired = gradle.startParameter.taskNames.any { taskPath ->
+    val taskName = taskPath.substringAfterLast(':')
+    taskName.contains("release", ignoreCase = true) ||
+        taskName.equals("assemble", ignoreCase = true) ||
+        taskName.equals("bundle", ignoreCase = true) ||
+        taskName.equals("build", ignoreCase = true)
 }
-if (stableSigningRequired && !hasStableSigning) {
+if (releaseSigningRequired && !hasReleaseSigning) {
     error(
-        "缺少 LunaDesk 稳定签名。请配置 key.properties，" +
+        "缺少 LunaDesk release 签名。请配置 key.properties，" +
             "或提供 LUNADESK_KEYSTORE_PATH / LUNADESK_STORE_PASSWORD / " +
             "LUNADESK_KEY_ALIAS / LUNADESK_KEY_PASSWORD。"
     )

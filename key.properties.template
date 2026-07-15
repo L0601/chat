@@ -1,3 +1,4 @@
+# 仅用于 release 签名；debug 使用仓库内固定的公开证书。
 storeFile=keystore/lunadesk.jks
 storePassword=your-store-password
 keyAlias=lunadesk

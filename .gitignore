@@ -5,7 +5,8 @@
 /captures
 /local.properties
 /key.properties
-/keystore
+/keystore/*
+!/keystore/lunadesk-debug.keystore
 /.idea
 /.kotlin
 app/build
