@@ -1,10 +1,12 @@
 package com.example.lunadesk.ui.screen.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,9 +21,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -31,21 +33,21 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,11 +57,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -132,16 +135,27 @@ fun SettingsScreen(
 
 @Composable
 private fun SettingsHeader(title: String, onBack: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp)
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+            }
+            Column(modifier = Modifier.padding(horizontal = 8.dp)) {
+                Text(
+                    "CONFIGURATION",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Text(text = title, style = MaterialTheme.typography.titleMedium)
+            }
         }
-        Text(text = title, style = MaterialTheme.typography.titleLarge)
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
@@ -153,29 +167,10 @@ private fun ProfileList(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("服务配置", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "每套配置独立保存地址、密钥、模型和生成参数",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                FilledTonalButton(onClick = actions.onCreate) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Text("新增", modifier = Modifier.padding(start = 6.dp))
-                }
-            }
-        }
+        item { ProfileListIntro(actions.onCreate) }
         items(state.profiles, key = { it.id }) { profile ->
             ProfileCard(
                 profile = profile,
@@ -200,6 +195,33 @@ private fun ProfileList(
 }
 
 @Composable
+private fun ProfileListIntro(onCreate: () -> Unit) {
+    Column(modifier = Modifier.padding(bottom = 12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("服务配置", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "地址、密钥、模型与生成参数独立保存",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            FilledTonalButton(onClick = onCreate, contentPadding = PaddingValues(horizontal = 12.dp)) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text("新增", modifier = Modifier.padding(start = 4.dp))
+            }
+        }
+        HorizontalDivider(
+            modifier = Modifier.padding(top = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
+    }
+}
+
+@Composable
 private fun ProfileCard(
     profile: ApiProfile,
     isActive: Boolean,
@@ -208,50 +230,76 @@ private fun ProfileCard(
     onActivate: () -> Unit,
     onDelete: () -> Unit
 ) {
-    OutlinedCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onEdit)
-            .semantics { role = Role.Button },
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.outlinedCardColors(
-            containerColor = if (isActive) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-            } else MaterialTheme.colorScheme.surface
-        )
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.small,
+        color = if (isActive) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent
     ) {
-        Row(
-            modifier = Modifier.padding(start = 18.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(profile.name, style = MaterialTheme.typography.titleMedium)
-                    if (isActive) ActiveLabel()
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onEdit)
+                    .semantics { role = Role.Button }
+                    .padding(start = 10.dp, end = 4.dp, top = 12.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(3.dp)
+                        .height(56.dp)
+                        .background(
+                            if (isActive) MaterialTheme.colorScheme.secondary
+                            else MaterialTheme.colorScheme.outlineVariant,
+                            MaterialTheme.shapes.extraSmall
+                        )
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            profile.name,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (isActive) ActiveLabel()
+                    }
+                    Text(
+                        profile.baseUrl.ifBlank { "尚未填写服务地址" },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        profile.selectedModel.ifBlank { "尚未选择模型" },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
-                Text(
-                    profile.baseUrl.ifBlank { "尚未填写服务地址" },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    profile.selectedModel.ifBlank { "尚未选择模型" },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Outlined.Edit, contentDescription = "编辑 ${profile.name}")
+                }
+                IconButton(onClick = onDelete, enabled = canDelete) {
+                    Icon(Icons.Outlined.Delete, contentDescription = "删除 ${profile.name}")
+                }
             }
             if (!isActive) {
-                TextButton(onClick = onActivate) { Text("设为当前") }
-            }
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Outlined.Edit, contentDescription = "编辑 ${profile.name}")
-            }
-            IconButton(onClick = onDelete, enabled = canDelete) {
-                Icon(Icons.Outlined.Delete, contentDescription = "删除 ${profile.name}")
+                TextButton(
+                    onClick = onActivate,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
+                ) {
+                    Text("设为当前配置", color = MaterialTheme.colorScheme.secondary)
+                }
             }
         }
     }
@@ -267,13 +315,13 @@ private fun ActiveLabel() {
             Icons.Default.Check,
             contentDescription = null,
             modifier = Modifier.size(14.dp),
-            tint = MaterialTheme.colorScheme.primary
+            tint = MaterialTheme.colorScheme.secondary
         )
         Text(
             "当前",
             modifier = Modifier.padding(start = 2.dp),
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.secondary
         )
     }
 }
@@ -291,14 +339,30 @@ private fun ProfileEditor(
     }
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(top = 12.dp, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(start = 16.dp, top = 20.dp, end = 16.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         state.validationError?.let { error ->
             item { ValidationNotice(error) }
         }
-        item { ConnectionFields(draft, actions) }
-        item { GenerationFields(draft, actions) }
+        item {
+            SettingsSection(
+                title = "连接信息",
+                subtitle = "为这套配置指定服务地址和访问密钥",
+                icon = Icons.Outlined.Link
+            ) {
+                ConnectionFields(draft, actions)
+            }
+        }
+        item {
+            SettingsSection(
+                title = "生成参数",
+                subtitle = "控制回答的随机度与最大长度",
+                icon = Icons.Outlined.Tune
+            ) {
+                GenerationFields(draft, actions)
+            }
+        }
         item {
             EditorActions(
                 state = state,
@@ -306,7 +370,15 @@ private fun ProfileEditor(
                 onTest = actions.onTestConnection
             )
         }
-        item { ModelControls(draft, state, actions) }
+        item {
+            SettingsSection(
+                title = "模型",
+                subtitle = "手动填写，或从服务端读取可用模型",
+                icon = Icons.Outlined.Memory
+            ) {
+                ModelControls(draft, state, actions)
+            }
+        }
         if (models.isNotEmpty()) {
             item {
                 Text(
@@ -337,10 +409,54 @@ private fun ProfileEditor(
 }
 
 @Composable
+private fun SettingsSection(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        SettingsSectionHeader(title, subtitle, icon)
+        content()
+        HorizontalDivider(
+            modifier = Modifier.padding(top = 6.dp),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
+    }
+}
+
+@Composable
+private fun SettingsSectionHeader(title: String, subtitle: String, icon: ImageVector) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.secondary
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
 private fun ValidationNotice(message: String) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-        shape = RoundedCornerShape(14.dp)
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        shape = MaterialTheme.shapes.small
     ) {
         Text(
             text = message,
@@ -361,7 +477,7 @@ private fun ConnectionFields(draft: ProfileDraft, actions: SettingsActions) {
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             label = { Text("配置名称 *") },
-            shape = RoundedCornerShape(16.dp)
+            shape = MaterialTheme.shapes.medium
         )
         OutlinedTextField(
             value = draft.baseUrl,
@@ -373,7 +489,7 @@ private fun ConnectionFields(draft: ProfileDraft, actions: SettingsActions) {
             leadingIcon = { Icon(Icons.Outlined.Link, contentDescription = null) },
             supportingText = { Text("兼容包含或不包含 /v1 的地址") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-            shape = RoundedCornerShape(16.dp)
+            shape = MaterialTheme.shapes.medium
         )
         OutlinedTextField(
             value = draft.apiKey,
@@ -393,7 +509,7 @@ private fun ConnectionFields(draft: ProfileDraft, actions: SettingsActions) {
             visualTransformation = if (showApiKey) {
                 VisualTransformation.None
             } else PasswordVisualTransformation(),
-            shape = RoundedCornerShape(16.dp)
+            shape = MaterialTheme.shapes.medium
         )
     }
 }
@@ -411,7 +527,7 @@ private fun GenerationFields(draft: ProfileDraft, actions: SettingsActions) {
                 label = { Text("温度") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 supportingText = { Text("0–2") },
-                shape = RoundedCornerShape(16.dp)
+                shape = MaterialTheme.shapes.medium
             )
             OutlinedTextField(
                 value = draft.maxTokensInput,
@@ -421,7 +537,7 @@ private fun GenerationFields(draft: ProfileDraft, actions: SettingsActions) {
                 label = { Text("最大输出") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 supportingText = { Text("1–200000") },
-                shape = RoundedCornerShape(16.dp)
+                shape = MaterialTheme.shapes.medium
             )
         }
         if (compact) {
@@ -471,7 +587,6 @@ private fun ModelControls(
 ) {
     val focusManager = LocalFocusManager.current
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
         OutlinedTextField(
             value = draft.selectedModel,
             onValueChange = actions.onModelChange,
@@ -479,7 +594,7 @@ private fun ModelControls(
             singleLine = true,
             label = { Text("模型") },
             placeholder = { Text("手动填写模型 ID") },
-            shape = RoundedCornerShape(16.dp)
+            shape = MaterialTheme.shapes.medium
         )
         OutlinedButton(
             onClick = actions.onRefreshModels,
@@ -501,7 +616,7 @@ private fun ModelControls(
                     autoCorrectEnabled = false
                 ),
                 keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                shape = RoundedCornerShape(16.dp)
+                shape = MaterialTheme.shapes.medium
             )
         }
     }
@@ -509,16 +624,14 @@ private fun ModelControls(
 
 @Composable
 private fun ModelRow(model: ModelInfo, selected: Boolean, onClick: () -> Unit) {
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = !selected, onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (selected) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-        )
+        shape = MaterialTheme.shapes.small,
+        color = if (selected) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else MaterialTheme.colorScheme.surface
     ) {
         Row(
             modifier = Modifier
@@ -540,7 +653,7 @@ private fun ModelRow(model: ModelInfo, selected: Boolean, onClick: () -> Unit) {
             Text(
                 if (selected) "已选择" else "选择",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.secondary
             )
         }
     }

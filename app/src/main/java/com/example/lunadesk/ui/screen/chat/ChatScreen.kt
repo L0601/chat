@@ -4,17 +4,22 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.TextView
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +33,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -46,6 +50,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Stop
@@ -54,12 +59,13 @@ import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -82,22 +88,31 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.lunadesk.data.model.ChatMessageUi
 import com.example.lunadesk.ui.LunaDeskUiState
 import com.example.lunadesk.ui.components.showAppToast
-import io.noties.markwon.Markwon
-import io.noties.markwon.ext.latex.JLatexMathPlugin
-import io.noties.markwon.inlineparser.MarkwonInlineParserPlugin
 import kotlin.math.abs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 
 private const val AUTO_SCROLL_DURATION_MS = 250
+
+private data class StarterPrompt(
+    val number: String,
+    val title: String,
+    val description: String,
+    val prompt: String
+)
+
+private val STARTER_PROMPTS = listOf(
+    StarterPrompt("01", "梳理思路", "把复杂问题拆成清晰步骤", "帮我梳理这个问题的思路，并拆成可执行步骤："),
+    StarterPrompt("02", "解释代码", "说明逻辑、风险与改进方向", "请解释下面这段代码的逻辑、潜在问题和改进建议："),
+    StarterPrompt("03", "整理内容", "提炼重点并生成结构化清单", "请提炼下面内容的重点，并整理成结构化清单：")
+)
 
 internal data class AutoFollowState(
     val pausedGenerationId: String? = null
@@ -160,7 +175,8 @@ fun ChatScreen(
             listState = listState,
             showLatestButton = state.messages.isNotEmpty() && !isAtBottom,
             onShowLatest = { autoScroll.request(state.messages.size) },
-            onOpenMenu = onOpenMenu
+            onOpenMenu = onOpenMenu,
+            onSuggestionClick = onInputChange
         )
         ComposerBar(
             state = state,
@@ -177,42 +193,45 @@ private fun ChatHeader(
     onOpenMenu: () -> Unit,
     onReset: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(onClick = onOpenMenu) {
-            Icon(Icons.Default.Menu, contentDescription = "打开导航菜单")
-        }
-        Column(
+    Column {
+        Row(
             modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxWidth()
+                .height(60.dp)
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (state.isSending) GeneratingDot()
+            IconButton(onClick = onOpenMenu) {
+                Icon(Icons.Default.Menu, contentDescription = "打开导航菜单")
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+            ) {
                 Text(
                     state.activeProfile?.name ?: "LunaDesk",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (state.isSending) GeneratingDot()
+                    Text(
+                        state.selectedModel.ifBlank { "尚未选择模型" },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
-            Text(
-                state.selectedModel.ifBlank { "尚未选择模型" },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            IconButton(onClick = onReset, enabled = state.messages.isNotEmpty()) {
+                Icon(Icons.Outlined.DeleteSweep, contentDescription = "重置当前对话")
+            }
         }
-        IconButton(onClick = onReset, enabled = state.messages.isNotEmpty()) {
-            Icon(Icons.Outlined.DeleteSweep, contentDescription = "重置当前对话")
-        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
@@ -223,16 +242,22 @@ private fun MessageArea(
     listState: LazyListState,
     showLatestButton: Boolean,
     onShowLatest: () -> Unit,
-    onOpenMenu: () -> Unit
+    onOpenMenu: () -> Unit,
+    onSuggestionClick: (String) -> Unit
 ) {
     Box(modifier = modifier.fillMaxWidth()) {
         if (state.messages.isEmpty()) {
-            EmptyState(onOpenMenu)
+            EmptyState(
+                profileName = state.activeProfile?.name ?: "默认配置",
+                modelName = state.selectedModel,
+                onOpenMenu = onOpenMenu,
+                onSuggestionClick = onSuggestionClick
+            )
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 state = listState,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 16.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 items(state.messages, key = { it.id }) { message ->
@@ -246,7 +271,7 @@ private fun MessageArea(
                 onClick = onShowLatest,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 8.dp, bottom = 12.dp),
+                    .padding(end = 16.dp, bottom = 12.dp),
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
             ) {
                 Text("查看最新")
@@ -256,28 +281,174 @@ private fun MessageArea(
 }
 
 @Composable
-private fun EmptyState(onOpenMenu: () -> Unit) {
-    Column(
+private fun EmptyState(
+    profileName: String,
+    modelName: String,
+    onOpenMenu: () -> Unit,
+    onSuggestionClick: (String) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 20.dp, top = 28.dp, end = 20.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        item { EmptyStateIntro() }
+        item {
+            Text(
+                "常用任务",
+                modifier = Modifier.padding(top = 14.dp, bottom = 2.dp),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        items(STARTER_PROMPTS, key = { it.number }) { starter ->
+            StarterPromptCard(starter) { onSuggestionClick(starter.prompt) }
+        }
+        item {
+            CurrentProfileRow(
+                profileName = profileName,
+                modelName = modelName,
+                onClick = onOpenMenu,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptyStateIntro() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            Modifier
+                .width(4.dp)
+                .height(56.dp)
+                .background(MaterialTheme.colorScheme.secondary, RoundedCornerShape(2.dp))
+        )
+        Column(Modifier.padding(start = 14.dp)) {
+            Text(
+                "今天想解决什么？",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                "选择一个常用任务，或直接在下方输入。",
+                modifier = Modifier.padding(top = 6.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun StarterPromptCard(starter: StarterPrompt, onClick: () -> Unit) {
+    Surface(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 72.dp)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            StarterNumber(starter.number)
+            StarterPromptCopy(starter, Modifier.weight(1f).padding(horizontal = 12.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.secondary
+            )
+        }
+    }
+}
+
+@Composable
+private fun StarterNumber(number: String) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .background(MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.shapes.small),
+        contentAlignment = Alignment.Center
     ) {
         Text(
-            "有什么可以帮忙的？",
-            style = MaterialTheme.typography.headlineMedium,
-            textAlign = TextAlign.Center
+            number,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSecondaryContainer
+        )
+    }
+}
+
+@Composable
+private fun StarterPromptCopy(starter: StarterPrompt, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(starter.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(
+            starter.description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun CurrentProfileRow(
+    profileName: String,
+    modelName: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ProfileCopy(profileName, modelName, Modifier.weight(1f))
+            Text("切换", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.secondary
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileCopy(profileName: String, modelName: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(
+            "当前配置",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            "选择一套 API 配置和模型，然后开始对话。",
-            modifier = Modifier.padding(top = 10.dp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
+            "$profileName · ${modelName.ifBlank { "选择模型" }}",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
-        Button(onClick = onOpenMenu, modifier = Modifier.padding(top = 20.dp)) {
-            Text("选择 API 配置")
-        }
     }
 }
 
@@ -291,6 +462,15 @@ private fun ComposerBar(
     val haptic = LocalHapticFeedback.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val inputInteraction = remember { MutableInteractionSource() }
+    val isFocused by inputInteraction.collectIsFocusedAsState()
+    val borderColor by animateColorAsState(
+        targetValue = if (isFocused) {
+            MaterialTheme.colorScheme.secondary
+        } else MaterialTheme.colorScheme.outlineVariant,
+        animationSpec = tween(180),
+        label = "composerBorder"
+    )
     val submit: () -> Unit = {
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         if (state.isSending) onStop() else {
@@ -304,18 +484,18 @@ private fun ComposerBar(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 4.dp),
-        shape = RoundedCornerShape(28.dp),
+            .padding(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 8.dp),
+        shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 3.dp,
-        border = ButtonDefaults.outlinedButtonBorder(enabled = true)
+        shadowElevation = 0.dp,
+        border = BorderStroke(if (isFocused) 1.5.dp else 1.dp, borderColor)
     ) {
         Row(
             modifier = Modifier.padding(start = 10.dp, end = 8.dp, top = 7.dp, bottom = 7.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedTextField(
+            TextField(
                 value = state.chatInput,
                 onValueChange = onInputChange,
                 modifier = Modifier
@@ -326,7 +506,8 @@ private fun ComposerBar(
                 placeholder = { Text("问问 LunaDesk") },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { submit() }),
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(10.dp),
+                interactionSource = inputInteraction,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
@@ -339,7 +520,7 @@ private fun ComposerBar(
                 onClick = submit,
                 enabled = state.isSending || state.chatInput.isNotBlank(),
                 modifier = Modifier.size(48.dp),
-                shape = CircleShape,
+                shape = RoundedCornerShape(12.dp),
                 contentPadding = PaddingValues(0.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (state.isSending) {
@@ -387,7 +568,12 @@ private fun MessageBlock(message: ChatMessageUi) {
 @Composable
 private fun UserMessage(message: ChatMessageUi) {
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(
+            topStart = 14.dp,
+            topEnd = 4.dp,
+            bottomEnd = 14.dp,
+            bottomStart = 14.dp
+        ),
         color = MaterialTheme.colorScheme.primaryContainer
     ) {
         MessageText(
@@ -423,15 +609,7 @@ private fun MessageText(
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         SelectionContainer {
-            if (message.isStreaming) {
-                Text(
-                    message.content.ifBlank { "暂无内容" },
-                    color = color,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            } else {
-                MarkdownText(message.content.ifBlank { "暂无内容" }, color)
-            }
+            MarkdownText(message.content.ifBlank { "暂无内容" }, color)
         }
         message.errorText?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     }
@@ -461,21 +639,11 @@ private fun CopyButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 @Composable
 private fun MarkdownText(markdown: String, color: Color) {
     val context = LocalContext.current
-    val markwon = remember(context) {
-        Markwon.builder(context)
-            .usePlugin(MarkwonInlineParserPlugin.create())
-            .usePlugin(JLatexMathPlugin.create(44f) { it.inlinesEnabled(true) })
-            .build()
-    }
+    val markwon = rememberMarkdownRenderer(context)
     val colorInt = color.toArgb()
     AndroidView(
         factory = { ctx ->
-            TextView(ctx).apply {
-                setTextColor(colorInt)
-                textSize = 16f
-                setLineSpacing(0f, 1.4f)
-                includeFontPadding = false
-            }
+            TextView(ctx).apply { applyMarkdownReadingStyle(colorInt) }
         },
         update = { view ->
             view.setTextColor(colorInt)
@@ -499,7 +667,7 @@ private fun GeneratingDot() {
             .padding(end = 6.dp)
             .size(7.dp)
             .alpha(alpha)
-            .background(MaterialTheme.colorScheme.primary, CircleShape)
+            .background(MaterialTheme.colorScheme.secondary, CircleShape)
     )
 }
 
@@ -527,7 +695,7 @@ private fun BlinkingCursor() {
         animationSpec = infiniteRepeatable(tween(500), RepeatMode.Reverse),
         label = "cursorAlpha"
     )
-    Text("▌", modifier = Modifier.alpha(alpha), color = MaterialTheme.colorScheme.primary)
+    Text("▌", modifier = Modifier.alpha(alpha), color = MaterialTheme.colorScheme.secondary)
 }
 
 @Composable

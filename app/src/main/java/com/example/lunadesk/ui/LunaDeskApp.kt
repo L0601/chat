@@ -1,30 +1,26 @@
 package com.example.lunadesk.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,6 +46,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.lunadesk.data.local.ApiProfile
 import com.example.lunadesk.ui.components.showAppToast
 import com.example.lunadesk.ui.screen.chat.ChatScreen
@@ -99,7 +96,7 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .background(MaterialTheme.colorScheme.background)
         ) {
             when (state.currentTab) {
                 AppTab.Chat -> ChatScreen(
@@ -149,31 +146,23 @@ private fun DrawerContent(
     onCreateProfile: () -> Unit,
     onNavigate: (AppTab) -> Unit
 ) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "LunaDesk",
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold
-            )
-            IconButton(onClick = onCreateProfile) {
-                Icon(Icons.Default.Add, contentDescription = "新增 API 配置")
-            }
-        }
+    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 20.dp)) {
+        DrawerBrandHeader(onCreateProfile)
         NavigationDrawerItem(
             label = { Text("聊天") },
             icon = { Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null) },
             selected = state.currentTab == AppTab.Chat,
             onClick = { onNavigate(AppTab.Chat) },
-            modifier = Modifier.padding(top = 12.dp),
+            modifier = Modifier.padding(top = 8.dp),
+            shape = RoundedCornerShape(8.dp),
             colors = drawerItemColors()
         )
         Text(
-            "API 配置",
-            modifier = Modifier.padding(start = 12.dp, top = 22.dp, bottom = 8.dp),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            "API PROFILES",
+            modifier = Modifier.padding(start = 12.dp, top = 24.dp, bottom = 8.dp),
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.9.sp),
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.secondary
         )
         LazyColumn(
             modifier = Modifier.weight(1f),
@@ -192,7 +181,36 @@ private fun DrawerContent(
             icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
             selected = state.currentTab == AppTab.Settings,
             onClick = { onNavigate(AppTab.Settings) },
+            shape = RoundedCornerShape(8.dp),
             colors = drawerItemColors()
+        )
+    }
+}
+
+@Composable
+private fun DrawerBrandHeader(onCreateProfile: () -> Unit) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "LunaDesk",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "AI WORKBENCH",
+                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.1.sp),
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+            IconButton(onClick = onCreateProfile) {
+                Icon(Icons.Default.Add, contentDescription = "新增 API 配置")
+            }
+        }
+        HorizontalDivider(
+            modifier = Modifier.padding(top = 16.dp),
+            color = MaterialTheme.colorScheme.outlineVariant
         )
     }
 }
@@ -212,20 +230,49 @@ private fun DrawerProfileItem(profile: ApiProfile, selected: Boolean, onClick: (
                 )
             }
         },
+        icon = { ProfileMarker(selected) },
         badge = {
             if (selected) {
-                Icon(Icons.Default.Check, contentDescription = "当前配置", modifier = Modifier.size(18.dp))
+                Text(
+                    "当前",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
             }
         },
         selected = selected,
         onClick = onClick,
+        shape = RoundedCornerShape(8.dp),
         colors = drawerItemColors()
     )
 }
 
 @Composable
+private fun ProfileMarker(selected: Boolean) {
+    Box(
+        modifier = Modifier
+            .width(20.dp)
+            .height(32.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(32.dp)
+                .background(
+                    color = if (selected) MaterialTheme.colorScheme.secondary
+                    else MaterialTheme.colorScheme.outlineVariant,
+                    shape = RoundedCornerShape(1.dp)
+                )
+        )
+    }
+}
+
+@Composable
 private fun drawerItemColors() = NavigationDrawerItemDefaults.colors(
-    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+    selectedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+    selectedIconColor = MaterialTheme.colorScheme.secondary,
+    selectedTextColor = MaterialTheme.colorScheme.onSurface,
     unselectedContainerColor = Color.Transparent
 )
 
