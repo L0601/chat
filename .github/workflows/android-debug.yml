@@ -9,6 +9,11 @@ on:
 jobs:
   build-debug:
     runs-on: ubuntu-latest
+    env:
+      LUNADESK_KEYSTORE_BASE64: ${{ secrets.LUNADESK_KEYSTORE_BASE64 }}
+      LUNADESK_STORE_PASSWORD: ${{ secrets.LUNADESK_STORE_PASSWORD }}
+      LUNADESK_KEY_ALIAS: ${{ secrets.LUNADESK_KEY_ALIAS }}
+      LUNADESK_KEY_PASSWORD: ${{ secrets.LUNADESK_KEY_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -27,11 +32,28 @@ jobs:
       - name: Grant execute permission
         run: chmod +x gradlew
 
-      - name: Assemble Debug APK
-        run: ./gradlew assembleDebug
+      - name: Prepare stable signing
+        shell: bash
+        run: |
+          test -n "$LUNADESK_KEYSTORE_BASE64"
+          test -n "$LUNADESK_STORE_PASSWORD"
+          test -n "$LUNADESK_KEY_ALIAS"
+          test -n "$LUNADESK_KEY_PASSWORD"
+          printf '%s' "$LUNADESK_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/lunadesk.jks"
+          echo "LUNADESK_KEYSTORE_PATH=$RUNNER_TEMP/lunadesk.jks" >> "$GITHUB_ENV"
+
+      - name: Test and assemble debug APK
+        run: ./gradlew testDebugUnitTest assembleDebug
+
+      - name: Verify signing certificate
+        shell: bash
+        run: |
+          expected="88c371ae1a2549f10fb96528f4ed6732d57363699e355add76a49f3924fca4e5"
+          actual="$(apksigner verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1)"
+          test "$actual" = "$expected"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: lunadesk-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/debug/app-debug.apk

@@ -15,14 +15,23 @@ val signingProperties = Properties().apply {
         file.inputStream().use(::load)
     }
 }
-val generatedVersionCode = providers.environmentVariable("LUNADESK_VERSION_CODE")
-    .orNull
-    ?.toIntOrNull()
-    ?: LocalDateTime.now().let { now ->
-        val year = now.year - 2020
-        val tail = now.format(DateTimeFormatter.ofPattern("MMdd")).toInt()
-        year * 100_000_000 + tail * 10_000
-    }
+fun signingValue(propertyName: String, environmentName: String): String? {
+    return signingProperties.getProperty(propertyName)?.takeIf { it.isNotBlank() }
+        ?: providers.environmentVariable(environmentName).orNull?.takeIf { it.isNotBlank() }
+}
+
+val signingStoreFile = signingValue("storeFile", "LUNADESK_KEYSTORE_PATH")
+val signingStorePassword = signingValue("storePassword", "LUNADESK_STORE_PASSWORD")
+val signingKeyAlias = signingValue("keyAlias", "LUNADESK_KEY_ALIAS")
+val signingKeyPassword = signingValue("keyPassword", "LUNADESK_KEY_PASSWORD")
+val hasStableSigning = listOf(
+    signingStoreFile,
+    signingStorePassword,
+    signingKeyAlias,
+    signingKeyPassword
+).all { !it.isNullOrBlank() }
+val buildTag = providers.environmentVariable("LUNADESK_BUILD_TAG").orNull
+    ?: LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmm"))
 
 android {
     namespace = "com.example.lunadesk"
@@ -32,8 +41,9 @@ android {
         applicationId = "com.example.lunadesk"
         minSdk = 26
         targetSdk = 35
-        versionCode = generatedVersionCode
-        versionName = "0.1.1"
+        versionCode = 700_000_001
+        versionName = "0.2.0"
+        buildConfigField("String", "BUILD_TAG", "\"$buildTag\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -43,13 +53,13 @@ android {
 
     buildTypes {
         debug {
-            if (signingProperties.isNotEmpty()) {
+            if (hasStableSigning) {
                 signingConfig = signingConfigs.getByName("debug")
             }
         }
         release {
             isMinifyEnabled = false
-            if (signingProperties.isNotEmpty()) {
+            if (hasStableSigning) {
                 signingConfig = signingConfigs.getByName("debug")
             }
             proguardFiles(
@@ -80,15 +90,28 @@ android {
     }
 
     signingConfigs {
-        if (signingProperties.isNotEmpty()) {
+        if (hasStableSigning) {
             getByName("debug") {
-                storeFile = rootProject.file(signingProperties.getProperty("storeFile"))
-                storePassword = signingProperties.getProperty("storePassword")
-                keyAlias = signingProperties.getProperty("keyAlias")
-                keyPassword = signingProperties.getProperty("keyPassword")
+                storeFile = rootProject.file(signingStoreFile!!)
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
             }
         }
     }
+}
+
+val stableSigningRequired = gradle.startParameter.taskNames.any { taskName ->
+    listOf("assemble", "bundle", "package", "install").any {
+        taskName.contains(it, ignoreCase = true)
+    }
+}
+if (stableSigningRequired && !hasStableSigning) {
+    error(
+        "缺少 LunaDesk 稳定签名。请配置 key.properties，" +
+            "或提供 LUNADESK_KEYSTORE_PATH / LUNADESK_STORE_PASSWORD / " +
+            "LUNADESK_KEY_ALIAS / LUNADESK_KEY_PASSWORD。"
+    )
 }
 
 dependencies {

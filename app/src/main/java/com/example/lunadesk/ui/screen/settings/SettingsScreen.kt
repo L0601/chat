@@ -188,7 +188,7 @@ private fun ProfileList(
         }
         item {
             Text(
-                text = "LunaDesk v${BuildConfig.VERSION_NAME}",
+                text = "LunaDesk v${BuildConfig.VERSION_NAME} · ${BuildConfig.BUILD_TAG}",
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 12.dp),
