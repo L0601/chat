@@ -12,6 +12,7 @@ import io.noties.markwon.Markwon
 import io.noties.markwon.core.MarkwonTheme
 import io.noties.markwon.ext.latex.JLatexMathPlugin
 import io.noties.markwon.inlineparser.MarkwonInlineParserPlugin
+import io.noties.markwon.ext.tables.TablePlugin
 import kotlin.math.roundToInt
 
 private data class MarkdownPalette(
@@ -33,6 +34,7 @@ internal fun rememberMarkdownRenderer(context: Context): Markwon {
     return remember(context, palette) {
         Markwon.builder(context)
             .usePlugin(MarkwonInlineParserPlugin.create())
+            .usePlugin(TablePlugin.create(context))
             .usePlugin(JLatexMathPlugin.create(44f) { it.inlinesEnabled(true) })
             .usePlugin(markdownThemePlugin(context, palette))
             .build()

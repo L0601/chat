@@ -9,6 +9,7 @@ import com.example.lunadesk.data.model.ModelsResponse
 import com.example.lunadesk.data.model.StreamChunk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
@@ -99,9 +100,9 @@ class LmStudioRepository(
                                     pending.append(line.trim()).append('\n')
                                 } else if (line.isBlank()) {
                                     val done = parseEvent(pending.toString()) { delta ->
-                                        if (delta.isNotBlank()) {
+                                        if (delta.isNotEmpty()) {
                                             emittedContent = true
-                                            trySend(StreamChunk(delta = delta))
+                                            trySendBlocking(StreamChunk(delta = delta))
                                         }
                                     }
                                     pending.clear()
@@ -115,24 +116,24 @@ class LmStudioRepository(
 
                         if (!completed && pending.isNotEmpty()) {
                             parseEvent(pending.toString()) { delta ->
-                                if (delta.isNotBlank()) {
+                                if (delta.isNotEmpty()) {
                                     emittedContent = true
-                                    trySend(StreamChunk(delta = delta))
+                                    trySendBlocking(StreamChunk(delta = delta))
                                 }
                             }
                         }
                     }
                 }.onSuccess {
-                    trySend(StreamChunk(done = true))
+                    trySendBlocking(StreamChunk(done = true))
                     close()
                 }.onFailure { error ->
                     if (error is CancellationException) {
-                        trySend(StreamChunk(cancelled = true))
+                        trySendBlocking(StreamChunk(cancelled = true))
                         close()
                         return@onFailure
                     }
                     if (emittedContent) {
-                        trySend(StreamChunk(error = humanizeError(error)))
+                        trySendBlocking(StreamChunk(error = humanizeError(error)))
                         close()
                         return@onFailure
                     }
@@ -140,12 +141,12 @@ class LmStudioRepository(
                     fallbackToNonStream(baseUrl, requestModel, apiKey, error.message)
                         .onSuccess { content ->
                             if (content.isNotBlank()) {
-                                trySend(StreamChunk(delta = content))
+                                trySendBlocking(StreamChunk(delta = content))
                             }
-                            trySend(StreamChunk(done = true))
+                            trySendBlocking(StreamChunk(done = true))
                             close()
                         }.onFailure { fallbackError ->
-                            trySend(StreamChunk(error = humanizeError(fallbackError)))
+                            trySendBlocking(StreamChunk(error = humanizeError(fallbackError)))
                             close()
                         }
                 }
