@@ -3,7 +3,6 @@ package com.example.lunadesk.ui.screen.chat
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.widget.TextView
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -82,7 +81,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -92,7 +90,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import com.example.lunadesk.data.model.ChatMessageUi
 import com.example.lunadesk.ui.LunaDeskUiState
 import com.example.lunadesk.ui.components.showAppToast
@@ -144,8 +141,10 @@ fun ChatScreen(
     val incomingMessage = state.messages.lastOrNull { it.isStreaming }
     val latestContent by rememberUpdatedState(incomingMessage?.content.orEmpty())
     var displayedContent by remember(incomingMessage?.id) { mutableStateOf(incomingMessage?.content.orEmpty()) }
+    var lastStreamingId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(incomingMessage?.id) {
         if (incomingMessage != null) {
+            lastStreamingId = incomingMessage.id
             while (true) {
                 delay(150)
                 displayedContent = stableStreamingMarkdown(latestContent)
@@ -170,12 +169,13 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(
-        state.messages.size,
-        streamingMessage?.content?.length,
-        streamingMessage?.id
-    ) {
-        val message = streamingMessage ?: return@LaunchedEffect
+    val followMessage = streamingMessage ?: state.messages.lastOrNull()?.takeIf {
+        it.id == lastStreamingId && !state.isSending
+    }
+    LaunchedEffect(state.messages.size, followMessage?.id, followMessage?.content?.length, followMessage?.isStreaming) {
+        val message = followMessage ?: return@LaunchedEffect
+        androidx.compose.runtime.withFrameNanos { }
+        androidx.compose.runtime.withFrameNanos { }
         if (followState.shouldFollow(message.id)) autoScroll.request(state.messages.size)
     }
 
@@ -190,7 +190,8 @@ fun ChatScreen(
             modifier = Modifier.weight(1f),
             state = displayState,
             listState = listState,
-            showLatestButton = state.messages.isNotEmpty() && !isAtBottom,
+            showLatestButton = state.messages.isNotEmpty() && !isAtBottom &&
+                (streamingMessage == null || !followState.shouldFollow(streamingMessage.id)),
             onShowLatest = {
                 followState = AutoFollowState()
                 autoScroll.request(state.messages.size)
@@ -608,7 +609,7 @@ private fun MessageText(
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         SelectionContainer {
-            MarkdownText(message.content.ifBlank { "暂无内容" }, color)
+            MarkdownContent(message.content.ifBlank { "暂无内容" }, color)
         }
         message.errorText?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     }
@@ -633,27 +634,6 @@ private fun CopyButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
             )
         }
     }
-}
-
-@Composable
-private fun MarkdownText(markdown: String, color: Color) {
-    val context = LocalContext.current
-    val markwon = rememberMarkdownRenderer(context)
-    val colorInt = color.toArgb()
-    AndroidView(
-        factory = { ctx ->
-            TextView(ctx).apply { applyMarkdownReadingStyle(colorInt) }
-        },
-        update = { view ->
-            val renderKey = markdown to colorInt
-            if (view.tag != renderKey) {
-                view.setTextColor(colorInt)
-                markwon.setMarkdown(view, normalizeMarkdown(markdown))
-                view.tag = renderKey
-            }
-        },
-        modifier = Modifier.fillMaxWidth()
-    )
 }
 
 @Composable
