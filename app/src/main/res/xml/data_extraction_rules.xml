@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
-    <cloud-backup />
-    <device-transfer />
+    <cloud-backup><exclude domain="database" path="conversations.db"/><exclude domain="database" path="conversations.db-wal"/><exclude domain="database" path="conversations.db-shm"/></cloud-backup>
+    <device-transfer><exclude domain="database" path="conversations.db"/><exclude domain="database" path="conversations.db-wal"/><exclude domain="database" path="conversations.db-shm"/></device-transfer>
 </data-extraction-rules>
-

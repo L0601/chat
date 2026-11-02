@@ -1,5 +1,6 @@
 package com.example.lunadesk.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import com.example.lunadesk.data.local.ApiProfile
 import com.example.lunadesk.ui.components.showAppToast
 import com.example.lunadesk.ui.screen.chat.ChatScreen
+import com.example.lunadesk.ui.screen.history.HistoryScreen
 import com.example.lunadesk.ui.screen.settings.SettingsActions
 import com.example.lunadesk.ui.screen.settings.SettingsScreen
 import kotlinx.coroutines.launch
@@ -68,6 +70,11 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
         viewModel.consumeToast(event.id)
     }
 
+    BackHandler(enabled = state.currentTab != AppTab.Chat && state.pendingAction == null) {
+        if (state.editorDraft != null) viewModel.requestCloseEditor()
+        else viewModel.switchTab(AppTab.Chat)
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -82,7 +89,7 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
                         scope.launch { drawerState.close() }
                     },
                     onCreateProfile = {
-                        viewModel.requestCreateProfile()
+                        viewModel.resetConversation()
                         scope.launch { drawerState.close() }
                     },
                     onNavigate = { tab ->
@@ -107,6 +114,7 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
                     onStop = viewModel::stopStreaming,
                     onReset = viewModel::resetConversation
                 )
+                AppTab.History -> HistoryScreen(state.conversations, { viewModel.switchTab(AppTab.Chat) }, viewModel::openConversation, viewModel::renameConversation, viewModel::deleteConversation)
                 AppTab.Settings -> SettingsScreen(
                     state = state,
                     actions = SettingsActions(
@@ -149,41 +157,23 @@ private fun DrawerContent(
     Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 20.dp)) {
         DrawerBrandHeader(onCreateProfile)
         NavigationDrawerItem(
-            label = { Text("聊天") },
-            icon = { Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null) },
-            selected = state.currentTab == AppTab.Chat,
-            onClick = { onNavigate(AppTab.Chat) },
-            modifier = Modifier.padding(top = 8.dp),
-            shape = RoundedCornerShape(8.dp),
-            colors = drawerItemColors()
+            label = { Text("历史对话") },
+            icon = { Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null, tint = MaterialTheme.colorScheme.secondary) },
+            selected = state.currentTab == AppTab.History,
+            onClick = { onNavigate(AppTab.History) },
+            modifier = Modifier.padding(top = 16.dp),
+            shape = RoundedCornerShape(8.dp), colors = drawerItemColors()
         )
-        Text(
-            "API PROFILES",
-            modifier = Modifier.padding(start = 12.dp, top = 24.dp, bottom = 8.dp),
-            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.9.sp),
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.secondary
-        )
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            items(state.profiles, key = { it.id }) { profile ->
-                DrawerProfileItem(
-                    profile = profile,
-                    selected = profile.id == state.activeProfileId,
-                    onClick = { onSelectProfile(profile.id) }
-                )
-            }
-        }
         NavigationDrawerItem(
-            label = { Text("管理 API 配置") },
-            icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
+            label = { Text("API 配置") },
+            icon = { Icon(Icons.Outlined.Settings, contentDescription = null, tint = MaterialTheme.colorScheme.secondary) },
             selected = state.currentTab == AppTab.Settings,
             onClick = { onNavigate(AppTab.Settings) },
-            shape = RoundedCornerShape(8.dp),
-            colors = drawerItemColors()
+            shape = RoundedCornerShape(8.dp), colors = drawerItemColors()
         )
+        Box(Modifier.weight(1f))
+        Text(state.activeProfile?.name.orEmpty() + " · " + state.selectedModel, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.secondary)
+
     }
 }
 
@@ -205,7 +195,7 @@ private fun DrawerBrandHeader(onCreateProfile: () -> Unit) {
                 )
             }
             IconButton(onClick = onCreateProfile) {
-                Icon(Icons.Default.Add, contentDescription = "新增 API 配置")
+                Icon(Icons.Default.Add, contentDescription = "新对话", tint = MaterialTheme.colorScheme.secondary)
             }
         }
         HorizontalDivider(

@@ -63,4 +63,17 @@ class MarkdownUtilsTest {
 
         assertEquals("结果为 " + delimiter + "x + 1" + delimiter + "。", normalizeMarkdown(input))
     }
+    @Test
+    fun `incomplete table row waits for newline during streaming`() {
+        val header = "| 服务 | 用途 |\n| --- | --- |\n"
+        assertEquals(header, stableStreamingMarkdown(header + "| S3 | 存储"))
+        assertEquals(header + "| S3 | 存储 |\n", stableStreamingMarkdown(header + "| S3 | 存储 |\n"))
+    }
+
+    @Test
+    fun `ordinary text and fenced code are not hidden`() {
+        assertEquals("普通文本", stableStreamingMarkdown("普通文本"))
+        val code = "```\n| a | b |\n| --- | --- |\n| partial"
+        assertEquals(code, stableStreamingMarkdown(code))
+    }
 }

@@ -5,6 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.lunadesk.data.IdGenerator
 import com.example.lunadesk.data.local.ApiProfile
 import com.example.lunadesk.data.local.ProfileStore
+import com.example.lunadesk.data.local.ConversationStore
+import com.example.lunadesk.data.local.ConversationSummary
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import com.example.lunadesk.data.model.ChatCompletionRequest
 import com.example.lunadesk.data.model.ChatMessagePayload
 import com.example.lunadesk.data.model.ChatMessageUi
@@ -19,7 +23,8 @@ import kotlinx.coroutines.launch
 
 enum class AppTab(val title: String) {
     Chat("聊天"),
-    Settings("API 配置")
+    Settings("API 配置"),
+    History("历史对话")
 }
 
 data class ProfileDraft(
@@ -57,6 +62,8 @@ sealed interface PendingProfileAction {
 
 data class LunaDeskUiState(
     val currentTab: AppTab = AppTab.Chat,
+    val conversationId: String? = null,
+    val conversations: List<ConversationSummary> = emptyList(),
     val profiles: List<ApiProfile> = emptyList(),
     val activeProfileId: String = "",
     val editorDraft: ProfileDraft? = null,
@@ -88,10 +95,12 @@ data class ToastEvent(
 class LunaDeskViewModel(
     private val profileStore: ProfileStore,
     private val chatService: OpenAiCompatibleService,
-    private val idGenerator: IdGenerator
+    private val idGenerator: IdGenerator,
+    private val conversationStore: ConversationStore? = null
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(LunaDeskUiState())
     val uiState: StateFlow<LunaDeskUiState> = _uiState.asStateFlow()
+    private val historyMutex = Mutex()
 
     init {
         viewModelScope.launch {
@@ -107,7 +116,42 @@ class LunaDeskViewModel(
         }
     }
 
+    fun refreshHistory() {
+        val store = conversationStore ?: return
+        viewModelScope.launch { runCatching { historyMutex.withLock { store.list() } }.onSuccess { list -> _uiState.update { it.copy(conversations = list) } }.onFailure { showToast(readableError(it)) } }
+    }
+
+    fun openConversation(id: String) {
+        if (uiState.value.isSending) return showToast("请先停止当前生成")
+        val store = conversationStore ?: return
+        viewModelScope.launch { runCatching { historyMutex.withLock { store.load(id) } }.onSuccess { messages -> _uiState.update { it.copy(conversationId = id, messages = messages, chatInput = "", currentTab = AppTab.Chat) } }.onFailure { showToast(readableError(it)) } }
+    }
+
+    fun renameConversation(id: String, title: String) {
+        val store = conversationStore ?: return
+        if (title.isBlank()) return
+        viewModelScope.launch { runCatching { historyMutex.withLock { store.rename(id, title.trim()) } }.onSuccess { refreshHistory() }.onFailure { showToast(readableError(it)) } }
+    }
+
+    fun deleteConversation(id: String) {
+        if (uiState.value.isSending && uiState.value.conversationId == id) return showToast("请先停止当前生成")
+        val store = conversationStore ?: return
+        viewModelScope.launch { runCatching { historyMutex.withLock { store.delete(id) } }.onSuccess {
+            _uiState.update { if (it.conversationId == id) it.copy(conversationId = null, messages = emptyList()) else it }
+            refreshHistory()
+        }.onFailure { showToast(readableError(it)) } }
+    }
+
+    private fun persistConversation() {
+        val store = conversationStore ?: return
+        val state = uiState.value
+        val id = state.conversationId ?: return
+        val messages = state.messages
+        viewModelScope.launch { runCatching { historyMutex.withLock { store.save(id, messages) } }.onFailure { showToast("历史保存失败：${readableError(it)}") } }
+    }
+
     fun switchTab(tab: AppTab) {
+        if (tab == AppTab.History) refreshHistory()
         if (tab == uiState.value.currentTab) return
         if (tab == AppTab.Chat && uiState.value.hasUnsavedChanges) {
             queueAction(PendingProfileAction.GoToChat)
@@ -272,11 +316,13 @@ class LunaDeskViewModel(
             content = state.chatInput.trim()
         )
         val assistantId = idGenerator.nextId()
+        val conversationId = state.conversationId ?: idGenerator.nextId()
         val request = buildChatRequest(profile, state.messages, userMessage)
 
         _uiState.update {
             it.copy(
                 chatInput = "",
+                conversationId = conversationId,
                 isSending = true,
                 messages = it.messages + userMessage + ChatMessageUi(
                     id = assistantId,
@@ -287,13 +333,19 @@ class LunaDeskViewModel(
             )
         }
 
+        persistConversation()
         viewModelScope.launch {
+            var lastSaved = System.currentTimeMillis()
             chatService.streamChat(profile.baseUrl, request, profile.apiKey).collect { chunk ->
+                if (uiState.value.conversationId != conversationId || uiState.value.messages.none { it.id == assistantId && it.isStreaming }) return@collect
                 when {
-                    chunk.delta.isNotBlank() -> appendAssistantDelta(assistantId, chunk.delta)
-                    chunk.done -> finishAssistantMessage(assistantId)
-                    chunk.cancelled -> finishCancelledMessage(assistantId)
-                    chunk.error != null -> markAssistantError(assistantId, chunk.error)
+                    chunk.delta.isNotEmpty() -> {
+                        appendAssistantDelta(assistantId, chunk.delta)
+                        if (System.currentTimeMillis() - lastSaved >= 2000) { persistConversation(); lastSaved = System.currentTimeMillis() }
+                    }
+                    chunk.done -> { finishAssistantMessage(assistantId); persistConversation() }
+                    chunk.cancelled -> { finishCancelledMessage(assistantId); persistConversation() }
+                    chunk.error != null -> { markAssistantError(assistantId, chunk.error); persistConversation() }
                 }
             }
         }
@@ -314,12 +366,14 @@ class LunaDeskViewModel(
                 }
             )
         }
+        persistConversation()
     }
 
     fun resetConversation() {
         chatService.cancelActiveChat()
-        _uiState.update { it.copy(messages = emptyList(), chatInput = "", isSending = false) }
-        showToast("已重置本轮对话")
+        if (uiState.value.isSending) stopStreaming()
+        _uiState.update { it.copy(conversationId = null, currentTab = AppTab.Chat, messages = emptyList(), chatInput = "", isSending = false) }
+        showToast("已开始新对话")
     }
 
     private fun createProfileDraft() {

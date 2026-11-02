@@ -50,6 +50,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Menu
@@ -75,6 +76,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -98,6 +100,7 @@ import kotlin.math.abs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 private const val AUTO_SCROLL_DURATION_MS = 250
 
@@ -138,7 +141,21 @@ fun ChatScreen(
 ) {
     val listState = rememberLazyListState()
     val autoScroll = rememberAutoScrollController(listState)
-    val streamingMessage = state.messages.lastOrNull { it.isStreaming }
+    val incomingMessage = state.messages.lastOrNull { it.isStreaming }
+    val latestContent by rememberUpdatedState(incomingMessage?.content.orEmpty())
+    var displayedContent by remember(incomingMessage?.id) { mutableStateOf(incomingMessage?.content.orEmpty()) }
+    LaunchedEffect(incomingMessage?.id) {
+        if (incomingMessage != null) {
+            while (true) {
+                delay(150)
+                displayedContent = stableStreamingMarkdown(latestContent)
+            }
+        }
+    }
+    val streamingMessage = incomingMessage?.copy(content = displayedContent)
+    val displayState = if (streamingMessage == null) state else state.copy(
+        messages = state.messages.map { if (it.id == streamingMessage.id) streamingMessage else it }
+    )
     var followState by remember { mutableStateOf(AutoFollowState()) }
     val isAtBottom by remember(state.messages.size) {
         derivedStateOf { listState.isAtBottom(state.messages.size) }
@@ -171,10 +188,13 @@ fun ChatScreen(
         ChatHeader(state = state, onOpenMenu = onOpenMenu, onReset = onReset)
         MessageArea(
             modifier = Modifier.weight(1f),
-            state = state,
+            state = displayState,
             listState = listState,
             showLatestButton = state.messages.isNotEmpty() && !isAtBottom,
-            onShowLatest = { autoScroll.request(state.messages.size) },
+            onShowLatest = {
+                followState = AutoFollowState()
+                autoScroll.request(state.messages.size)
+            },
             onOpenMenu = onOpenMenu,
             onSuggestionClick = onInputChange
         )
@@ -202,7 +222,7 @@ private fun ChatHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onOpenMenu) {
-                Icon(Icons.Default.Menu, contentDescription = "打开导航菜单")
+                Icon(Icons.Default.Menu, contentDescription = "打开导航菜单", tint = MaterialTheme.colorScheme.secondary)
             }
             Column(
                 modifier = Modifier
@@ -210,7 +230,9 @@ private fun ChatHeader(
                     .padding(horizontal = 8.dp)
             ) {
                 Text(
-                    state.activeProfile?.name ?: "LunaDesk",
+                    state.conversations.firstOrNull { it.id == state.conversationId }?.title
+                        ?: state.messages.firstOrNull { it.role == "user" }?.content?.take(40)
+                        ?: "新对话",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
@@ -227,8 +249,8 @@ private fun ChatHeader(
                     )
                 }
             }
-            IconButton(onClick = onReset, enabled = state.messages.isNotEmpty()) {
-                Icon(Icons.Outlined.DeleteSweep, contentDescription = "重置当前对话")
+            IconButton(onClick = onReset, enabled = true) {
+                Icon(Icons.Default.Add, contentDescription = "新对话", tint = MaterialTheme.colorScheme.secondary)
             }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -293,26 +315,7 @@ private fun EmptyState(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item { EmptyStateIntro() }
-        item {
-            Text(
-                "常用任务",
-                modifier = Modifier.padding(top = 14.dp, bottom = 2.dp),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        items(STARTER_PROMPTS, key = { it.number }) { starter ->
-            StarterPromptCard(starter) { onSuggestionClick(starter.prompt) }
-        }
-        item {
-            CurrentProfileRow(
-                profileName = profileName,
-                modelName = modelName,
-                onClick = onOpenMenu,
-                modifier = Modifier.padding(top = 8.dp)
-            )
-        }
+
     }
 }
 
@@ -325,7 +328,7 @@ private fun EmptyStateIntro() {
         Box(
             Modifier
                 .width(4.dp)
-                .height(56.dp)
+                .height(32.dp)
                 .background(MaterialTheme.colorScheme.secondary, RoundedCornerShape(2.dp))
         )
         Column(Modifier.padding(start = 14.dp)) {
@@ -333,12 +336,6 @@ private fun EmptyStateIntro() {
                 "今天想解决什么？",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
-            )
-            Text(
-                "选择一个常用任务，或直接在下方输入。",
-                modifier = Modifier.padding(top = 6.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -646,8 +643,12 @@ private fun MarkdownText(markdown: String, color: Color) {
             TextView(ctx).apply { applyMarkdownReadingStyle(colorInt) }
         },
         update = { view ->
-            view.setTextColor(colorInt)
-            markwon.setMarkdown(view, normalizeMarkdown(markdown))
+            val renderKey = markdown to colorInt
+            if (view.tag != renderKey) {
+                view.setTextColor(colorInt)
+                markwon.setMarkdown(view, normalizeMarkdown(markdown))
+                view.tag = renderKey
+            }
         },
         modifier = Modifier.fillMaxWidth()
     )
@@ -713,7 +714,7 @@ private class AutoScrollController(
     private val requests = Channel<Int>(capacity = Channel.CONFLATED)
     private val worker = scope.launch {
         for (targetIndex in requests) {
-            launch { listState.animateToBottom(targetIndex) }.join()
+            listState.scrollToItem(targetIndex)
         }
     }
 

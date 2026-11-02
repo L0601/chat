@@ -2,6 +2,7 @@ package com.example.lunadesk.data
 
 import android.content.Context
 import com.example.lunadesk.data.local.DataStoreProfileStore
+import com.example.lunadesk.data.local.SqliteConversationStore
 import com.example.lunadesk.data.remote.LmStudioRepository
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -13,6 +14,7 @@ class AppContainer(context: Context) {
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    val conversationStore = SqliteConversationStore(context)
     val profileStore = DataStoreProfileStore(context)
     val chatService = LmStudioRepository(okHttpClient)
     val idGenerator: IdGenerator = UuidIdGenerator()

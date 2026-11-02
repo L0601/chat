@@ -333,6 +333,7 @@ private fun ProfileEditor(
     draft: ProfileDraft,
     actions: SettingsActions
 ) {
+    var showAdvanced by remember(draft.id) { mutableStateOf(false) }
     val models = remember(state.models, state.modelSearchQuery) {
         if (state.modelSearchQuery.isBlank()) state.models
         else state.models.filter { it.id.contains(state.modelSearchQuery, ignoreCase = true) }
@@ -353,22 +354,6 @@ private fun ProfileEditor(
             ) {
                 ConnectionFields(draft, actions)
             }
-        }
-        item {
-            SettingsSection(
-                title = "生成参数",
-                subtitle = "控制回答的随机度与最大长度",
-                icon = Icons.Outlined.Tune
-            ) {
-                GenerationFields(draft, actions)
-            }
-        }
-        item {
-            EditorActions(
-                state = state,
-                onSave = actions.onSave,
-                onTest = actions.onTestConnection
-            )
         }
         item {
             SettingsSection(
@@ -395,6 +380,15 @@ private fun ProfileEditor(
                 )
             }
         }
+        item {
+            TextButton(onClick = { showAdvanced = !showAdvanced }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (showAdvanced) "收起高级参数" else "高级参数")
+            }
+        }
+        if (showAdvanced) {
+            item { GenerationFields(draft, actions) }
+        }
+        item { EditorActions(state, actions.onSave, actions.onTestConnection) }
         if (!draft.isNew) {
             item {
                 TextButton(

@@ -12,7 +12,8 @@ class LunaDeskViewModelFactory(
         return LunaDeskViewModel(
             profileStore = container.profileStore,
             chatService = container.chatService,
-            idGenerator = container.idGenerator
+            idGenerator = container.idGenerator,
+            conversationStore = container.conversationStore
         ) as T
     }
 }

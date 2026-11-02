@@ -47,3 +47,16 @@ private fun normalizeHeadingLine(line: String): String {
         match.groupValues[1] + match.groupValues[2] + " " + match.groupValues[3]
     }
 }
+
+// Keep a table row stable while its cells are still arriving.
+internal fun stableStreamingMarkdown(markdown: String): String {
+    val lastBreak = markdown.lastIndexOf('\n')
+    if (lastBreak < 0 || lastBreak == markdown.lastIndex) return markdown
+    val lastLine = markdown.substring(lastBreak + 1)
+    if (!lastLine.trimStart().startsWith("|")) return markdown
+    val preceding = markdown.substring(0, lastBreak).lines()
+    if (preceding.count { line -> FENCE_PREFIXES.any(line.trimStart()::startsWith) } % 2 != 0) return markdown
+    val tableLines = preceding.asReversed().takeWhile { it.isNotBlank() && it.contains('|') }
+    val separator = Regex("""^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$""")
+    return if (tableLines.any { separator.matches(it) }) markdown.substring(0, lastBreak + 1) else markdown
+}

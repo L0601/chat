@@ -1,3 +1,2 @@
 <?xml version="1.0" encoding="utf-8"?>
-<full-backup-content />
-
+<full-backup-content><exclude domain="database" path="conversations.db"/><exclude domain="database" path="conversations.db-journal"/><exclude domain="database" path="conversations.db-wal"/><exclude domain="database" path="conversations.db-shm"/></full-backup-content>

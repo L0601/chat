@@ -2,11 +2,11 @@ package com.example.lunadesk.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val LightPrimary = Color(0xFF0F172A)
+val LightPrimary = Color(0xFF527C9B)
 val LightOnPrimary = Color(0xFFFFFFFF)
 val LightPrimaryContainer = Color(0xFFE8EEF5)
 val LightOnPrimaryContainer = Color(0xFF0F172A)
-val LightSecondary = Color(0xFF0369A1)
+val LightSecondary = Color(0xFF5F88A6)
 val LightOnSecondary = Color(0xFFFFFFFF)
 val LightSecondaryContainer = Color(0xFFE0F2FE)
 val LightOnSecondaryContainer = Color(0xFF0C4A6E)
