@@ -5,6 +5,9 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import com.example.lunadesk.data.model.ChatMessageUi
+import com.example.lunadesk.data.model.CallMetrics
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -18,13 +21,15 @@ interface ConversationStore {
     suspend fun delete(id: String)
 }
 
-class SqliteConversationStore(context: Context) : SQLiteOpenHelper(context, "conversations.db", null, 1), ConversationStore {
+class SqliteConversationStore(context: Context) : SQLiteOpenHelper(context, "conversations.db", null, 2), ConversationStore {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE conversations (id TEXT PRIMARY KEY, title TEXT NOT NULL, updated_at INTEGER NOT NULL)")
-        db.execSQL("CREATE TABLE messages (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL, position INTEGER NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, error TEXT)")
+        db.execSQL("CREATE TABLE messages (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL, position INTEGER NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, error TEXT, metrics TEXT)")
         db.execSQL("CREATE INDEX messages_conversation ON messages(conversation_id, position)")
     }
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) db.execSQL("ALTER TABLE messages ADD COLUMN metrics TEXT")
+    }
 
     override suspend fun list() = withContext(Dispatchers.IO) {
         readableDatabase.rawQuery("SELECT id, title, updated_at FROM conversations ORDER BY updated_at DESC", null).use { c ->
@@ -32,8 +37,8 @@ class SqliteConversationStore(context: Context) : SQLiteOpenHelper(context, "con
         }
     }
     override suspend fun load(id: String) = withContext(Dispatchers.IO) {
-        readableDatabase.query("messages", arrayOf("id", "role", "content", "error"), "conversation_id=?", arrayOf(id), null, null, "position").use { c ->
-            buildList { while (c.moveToNext()) add(ChatMessageUi(c.getString(0), c.getString(1), c.getString(2), errorText = c.getString(3))) }
+        readableDatabase.query("messages", arrayOf("id", "role", "content", "error", "metrics"), "conversation_id=?", arrayOf(id), null, null, "position").use { c ->
+            buildList { while (c.moveToNext()) add(ChatMessageUi(c.getString(0), c.getString(1), c.getString(2), errorText = c.getString(3), metrics = c.getString(4)?.let { raw -> runCatching { Json.decodeFromString<CallMetrics>(raw) }.getOrNull() })) }
         }
     }
     override suspend fun save(id: String, messages: List<ChatMessageUi>) = withContext(Dispatchers.IO) {
@@ -49,6 +54,7 @@ class SqliteConversationStore(context: Context) : SQLiteOpenHelper(context, "con
                 db.insertOrThrow("messages", null, ContentValues().apply {
                     put("id", m.id); put("conversation_id", id); put("position", index)
                     put("role", m.role); put("content", m.content); put("error", m.errorText)
+                    put("metrics", m.metrics?.let { Json.encodeToString(it) })
                 })
             }
             db.setTransactionSuccessful()

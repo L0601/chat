@@ -253,6 +253,7 @@ private fun ChatHeader(
                 Icon(Icons.Default.Add, contentDescription = "新对话", tint = MaterialTheme.colorScheme.secondary)
             }
         }
+        ConversationMetricsHeader(state.messages)
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
@@ -594,6 +595,7 @@ private fun AssistantMessage(message: ChatMessageUi) {
         } else {
             MessageText(message, MaterialTheme.colorScheme.onSurface)
             if (message.isStreaming) BlinkingCursor()
+            else MessageMetrics(message.metrics)
         }
     }
 }

@@ -338,6 +338,11 @@ class LunaDeskViewModel(
             var lastSaved = System.currentTimeMillis()
             chatService.streamChat(profile.baseUrl, request, profile.apiKey).collect { chunk ->
                 if (uiState.value.conversationId != conversationId || uiState.value.messages.none { it.id == assistantId && it.isStreaming }) return@collect
+                chunk.metrics?.let { metrics ->
+                    _uiState.update { current -> current.copy(messages = current.messages.map { message ->
+                        if (message.id == assistantId) message.copy(metrics = metrics) else message
+                    }) }
+                }
                 when {
                     chunk.delta.isNotEmpty() -> {
                         appendAssistantDelta(assistantId, chunk.delta)

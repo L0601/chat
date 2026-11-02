@@ -34,12 +34,33 @@ data class ChatCompletionRequest(
     val messages: List<ChatMessagePayload>,
     val temperature: Float,
     @SerialName("max_tokens") val maxTokens: Int,
-    val stream: Boolean
+    val stream: Boolean,
+    @SerialName("stream_options") val streamOptions: StreamOptions? = null
+)
+
+@Serializable
+data class StreamOptions(@SerialName("include_usage") val includeUsage: Boolean)
+
+@Serializable
+data class TokenUsage(
+    @SerialName("prompt_tokens") val promptTokens: Int? = null,
+    @SerialName("completion_tokens") val completionTokens: Int? = null
+)
+
+@Serializable
+data class CallMetrics(
+    val inputTokens: Int? = null,
+    val outputTokens: Int? = null,
+    val firstTextMs: Long? = null,
+    val outputMs: Long? = null,
+    val model: String? = null,
+    val completed: Boolean = false
 )
 
 @Serializable
 data class ChatCompletionResponse(
-    val choices: List<ChatChoice> = emptyList()
+    val choices: List<ChatChoice> = emptyList(),
+    val usage: TokenUsage? = null
 )
 
 @Serializable
@@ -55,7 +76,8 @@ data class ChatAssistantMessage(
 
 @Serializable
 data class ChatStreamResponse(
-    val choices: List<ChatStreamChoice> = emptyList()
+    val choices: List<ChatStreamChoice> = emptyList(),
+    val usage: TokenUsage? = null
 )
 
 @Serializable
@@ -73,7 +95,8 @@ data class StreamChunk(
     val delta: String = "",
     val done: Boolean = false,
     val cancelled: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val metrics: CallMetrics? = null
 )
 
 data class ChatMessageUi(
@@ -81,5 +104,6 @@ data class ChatMessageUi(
     val role: String,
     val content: String,
     val isStreaming: Boolean = false,
-    val errorText: String? = null
+    val errorText: String? = null,
+    val metrics: CallMetrics? = null
 )

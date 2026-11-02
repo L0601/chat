@@ -7,6 +7,9 @@ import com.example.lunadesk.data.model.LoadModelRequest
 import com.example.lunadesk.data.model.ModelInfo
 import com.example.lunadesk.data.model.ModelsResponse
 import com.example.lunadesk.data.model.StreamChunk
+import com.example.lunadesk.data.model.StreamOptions
+import com.example.lunadesk.data.model.TokenUsage
+import com.example.lunadesk.data.model.CallMetrics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.trySendBlocking
@@ -71,93 +74,90 @@ class LmStudioRepository(
         execute(request) { }
     }
 
-    override fun streamChat(
-        baseUrl: String,
-        requestModel: ChatCompletionRequest,
-        apiKey: String
-    ): Flow<StreamChunk> {
-        return callbackFlow {
-            val streamJob = launch(Dispatchers.IO) {
-                var emittedContent = false
-                val call = client.newCall(buildChatRequest(baseUrl, requestModel, apiKey))
+    override fun streamChat(baseUrl: String, requestModel: ChatCompletionRequest, apiKey: String): Flow<StreamChunk> = callbackFlow {
+        val job = launch(Dispatchers.IO) {
+            var emitted = false
+            var usage: TokenUsage? = null
+            var first: Long? = null
+            var last: Long? = null
+            var visibleChunks = 0
+            var started = 0L
+            fun collectDelta(delta: String) {
+                if (delta.isEmpty()) return
+                if (delta.isNotBlank()) {
+                    val now = System.nanoTime()
+                    if (first == null) first = now
+                    last = now
+                    visibleChunks++
+                }
+                emitted = true
+                trySendBlocking(StreamChunk(delta = delta))
+            }
+            fun runStream(withUsage: Boolean) {
+                val model = requestModel.copy(stream = true, streamOptions = if (withUsage) StreamOptions(true) else null)
+                val call = client.newCall(buildChatRequest(baseUrl, model, apiKey))
                 activeChatCall = call
-
-                runCatching {
-                    call.execute().use { response ->
-                        if (!response.isSuccessful) {
-                            throw IOException(response.body?.string().orEmpty().ifBlank { response.message })
-                        }
-                        val reader = response.body?.charStream()?.buffered()
-                            ?: throw IOException("响应体为空")
-                        val pending = StringBuilder()
-                        var completed = false
-
-                        reader.useLines { lines ->
-                            lines.forEach { line ->
-                                if (line.startsWith("data:")) {
-                                    pending.append(line.removePrefix("data:").trim()).append('\n')
-                                } else if (line.startsWith("event:")) {
-                                    pending.append(line.trim()).append('\n')
-                                } else if (line.isBlank()) {
-                                    val done = parseEvent(pending.toString()) { delta ->
-                                        if (delta.isNotEmpty()) {
-                                            emittedContent = true
-                                            trySendBlocking(StreamChunk(delta = delta))
-                                        }
-                                    }
-                                    pending.clear()
-                                    if (done) {
-                                        completed = true
-                                        return@useLines
-                                    }
-                                }
-                            }
-                        }
-
-                        if (!completed && pending.isNotEmpty()) {
-                            parseEvent(pending.toString()) { delta ->
-                                if (delta.isNotEmpty()) {
-                                    emittedContent = true
-                                    trySendBlocking(StreamChunk(delta = delta))
-                                }
+                started = System.nanoTime()
+                call.execute().use { response ->
+                    if (!response.isSuccessful) throw StreamHttpException(response.code, response.body?.string().orEmpty())
+                    val reader = response.body?.charStream()?.buffered() ?: throw IOException("响应体为空")
+                    val pending = StringBuilder()
+                    var terminal = false
+                    reader.useLines { lines ->
+                        for (line in lines) {
+                            if (line.startsWith("data:")) pending.append(line.removePrefix("data:").trim()).append('\n')
+                            else if (line.startsWith("event:")) pending.append(line.trim()).append('\n')
+                            else if (line.isBlank()) {
+                                val done = parseEvent(pending.toString(), ::collectDelta, { usage = it }) { terminal = true }
+                                pending.clear()
+                                if (done) { terminal = true; break }
                             }
                         }
                     }
-                }.onSuccess {
-                    trySendBlocking(StreamChunk(done = true))
-                    close()
-                }.onFailure { error ->
-                    if (error is CancellationException) {
-                        trySendBlocking(StreamChunk(cancelled = true))
-                        close()
-                        return@onFailure
-                    }
-                    if (emittedContent) {
-                        trySendBlocking(StreamChunk(error = humanizeError(error)))
-                        close()
-                        return@onFailure
-                    }
-
-                    fallbackToNonStream(baseUrl, requestModel, apiKey, error.message)
-                        .onSuccess { content ->
-                            if (content.isNotBlank()) {
-                                trySendBlocking(StreamChunk(delta = content))
-                            }
-                            trySendBlocking(StreamChunk(done = true))
-                            close()
-                        }.onFailure { fallbackError ->
-                            trySendBlocking(StreamChunk(error = humanizeError(fallbackError)))
-                            close()
-                        }
+                    if (pending.isNotEmpty() && parseEvent(pending.toString(), ::collectDelta, { usage = it }) { terminal = true }) terminal = true
+                    if (!terminal) throw IOException("流式响应未正常结束")
                 }
             }
-
-            awaitClose {
-                streamJob.cancel()
-                activeChatCall?.cancel()
-                activeChatCall = null
+            val result = runCatching {
+                try {
+                    try { runStream(true) }
+                    catch (error: StreamHttpException) {
+                        if (!emitted && error.rejectsUsageOption()) runStream(false) else throw error
+                    }
+                } catch (error: StreamHttpException) {
+                    if (emitted || !error.rejectsStreaming()) throw error
+                    val response = execute(buildChatRequest(baseUrl, requestModel.copy(stream = false, streamOptions = null), apiKey)) {
+                        json.decodeFromString<ChatCompletionResponse>(it)
+                    }
+                    val content = response.choices.firstOrNull()?.message?.content.orEmpty()
+                    if (content.isBlank()) throw IOException("未收到有效回复")
+                    usage = response.usage
+                    trySendBlocking(StreamChunk(delta = content))
+                }
             }
+            result.onSuccess {
+                val durationMs = if (visibleChunks >= 2 && first != null && last != null) (last!! - first!!) / 1_000_000 else null
+                trySendBlocking(StreamChunk(done = true, metrics = CallMetrics(
+                    inputTokens = usage?.promptTokens, outputTokens = usage?.completionTokens,
+                    firstTextMs = first?.let { (it - started) / 1_000_000 },
+                    outputMs = durationMs?.takeIf { it >= 100 }, model = requestModel.model, completed = true
+                )))
+            }.onFailure { error ->
+                trySendBlocking(StreamChunk(error = humanizeError(error), metrics = CallMetrics(
+                    inputTokens = usage?.promptTokens, outputTokens = usage?.completionTokens,
+                    firstTextMs = first?.let { (it - started) / 1_000_000 }, model = requestModel.model
+                )))
+            }
+            close()
         }
+        awaitClose { job.cancel(); activeChatCall?.cancel(); activeChatCall = null }
+    }
+
+    private class StreamHttpException(val code: Int, val responseBody: String) : IOException(responseBody.ifBlank { "HTTP $code" }) {
+        private fun isRejected(): Boolean = code in listOf(400, 422) &&
+            listOf("unsupported", "unknown", "unexpected", "unrecognized", "not supported", "invalid").any { it in responseBody.lowercase() }
+        fun rejectsUsageOption(): Boolean = isRejected() && "stream_options" in responseBody.lowercase()
+        fun rejectsStreaming(): Boolean = isRejected() && "stream" in responseBody.lowercase() && "stream_options" !in responseBody.lowercase()
     }
 
     override fun cancelActiveChat() {
@@ -165,23 +165,7 @@ class LmStudioRepository(
         activeChatCall = null
     }
 
-    private suspend fun fallbackToNonStream(
-        baseUrl: String,
-        requestModel: ChatCompletionRequest,
-        apiKey: String,
-        reason: String?
-    ): Result<String> {
-        return runCatching {
-            val response = execute(buildChatRequest(baseUrl, requestModel.copy(stream = false), apiKey)) { body ->
-                json.decodeFromString<ChatCompletionResponse>(body)
-            }
-            response.choices.firstOrNull()?.message?.content.orEmpty().ifBlank {
-                throw IOException(reason ?: "未收到有效回复")
-            }
-        }
-    }
-
-    private fun parseEvent(payload: String, onDelta: (String) -> Unit): Boolean {
+    private fun parseEvent(payload: String, onDelta: (String) -> Unit, onUsage: (TokenUsage) -> Unit, onFinish: () -> Unit): Boolean {
         val lines = payload
             .lineSequence()
             .map { it.trim() }
@@ -200,10 +184,12 @@ class LmStudioRepository(
             json.decodeFromString<ChatStreamResponse>(content)
         }.getOrNull() ?: return false
 
+        chunk.usage?.let(onUsage)
+        if (chunk.choices.any { it.finishReason != null }) onFinish()
         chunk.choices.forEach { choice ->
             onDelta(choice.delta?.content.orEmpty())
         }
-        return chunk.choices.any { it.finishReason != null }
+        return false
     }
 
     private fun buildChatRequest(baseUrl: String, requestModel: ChatCompletionRequest, apiKey: String = ""): Request {
