@@ -2,6 +2,7 @@ package com.example.lunadesk.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,6 +71,10 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
         viewModel.consumeToast(event.id)
     }
 
+    LaunchedEffect(drawerState.currentValue) {
+        if (drawerState.currentValue == DrawerValue.Open) viewModel.refreshHistory()
+    }
+
     BackHandler(enabled = state.currentTab != AppTab.Chat && state.pendingAction == null) {
         if (state.editorDraft != null) viewModel.requestCloseEditor()
         else viewModel.switchTab(AppTab.Chat)
@@ -84,6 +89,10 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
             ) {
                 DrawerContent(
                     state = state,
+                    onOpenConversation = { id ->
+                        viewModel.openConversation(id)
+                        scope.launch { drawerState.close() }
+                    },
                     onSelectProfile = { id ->
                         viewModel.requestActivateProfile(id)
                         scope.launch { drawerState.close() }
@@ -150,6 +159,7 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
 @Composable
 private fun DrawerContent(
     state: LunaDeskUiState,
+    onOpenConversation: (String) -> Unit,
     onSelectProfile: (String) -> Unit,
     onCreateProfile: () -> Unit,
     onNavigate: (AppTab) -> Unit
@@ -164,6 +174,24 @@ private fun DrawerContent(
             modifier = Modifier.padding(top = 16.dp),
             shape = RoundedCornerShape(8.dp), colors = drawerItemColors()
         )
+        state.conversations.sortedByDescending { it.updatedAt }.take(3).forEach { conversation ->
+            val selected = state.currentTab == AppTab.Chat && state.conversationId == conversation.id
+            Row(
+                modifier = Modifier.fillMaxWidth().height(44.dp)
+                    .background(if (selected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent, RoundedCornerShape(8.dp))
+                    .clickable { onOpenConversation(conversation.id) }
+                    .padding(start = 56.dp, end = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    conversation.title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         NavigationDrawerItem(
             label = { Text("API 配置") },
             icon = { Icon(Icons.Outlined.Settings, contentDescription = null, tint = MaterialTheme.colorScheme.secondary) },
