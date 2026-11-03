@@ -19,8 +19,11 @@ import java.util.Date
 @Composable
 fun HistoryScreen(items: List<ConversationSummary>, onBack: () -> Unit, onOpen: (String) -> Unit, onRename: (String, String) -> Unit, onDelete: (String) -> Unit) {
     var query by remember { mutableStateOf("") }
+    var showAll by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf<ConversationSummary?>(null) }
     var deleting by remember { mutableStateOf<ConversationSummary?>(null) }
+    val matching = items.sortedByDescending { it.updatedAt }.filter { it.title.contains(query, ignoreCase = true) }
+    val visible = if (query.isNotBlank() || showAll) matching else matching.take(3)
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(60.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = MaterialTheme.colorScheme.secondary) }
@@ -28,7 +31,7 @@ fun HistoryScreen(items: List<ConversationSummary>, onBack: () -> Unit, onOpen: 
         }
         OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), placeholder = { Text("搜索对话") }, singleLine = true)
         LazyColumn(contentPadding = PaddingValues(16.dp)) {
-            items(items.filter { it.title.contains(query, ignoreCase = true) }, key = { it.id }) { item ->
+            items(visible, key = { it.id }) { item ->
                 var expanded by remember { mutableStateOf(false) }
                 Row(Modifier.fillMaxWidth().clickable { onOpen(item.id) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -44,6 +47,13 @@ fun HistoryScreen(items: List<ConversationSummary>, onBack: () -> Unit, onOpen: 
                     }
                 }
                 HorizontalDivider()
+            }
+            if (query.isBlank() && matching.size > 3) item(key = "history_toggle") {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    TextButton(onClick = { showAll = !showAll }) {
+                        Text(if (showAll) "收起" else "查看全部（${matching.size}）")
+                    }
+                }
             }
         }
     }
