@@ -2,6 +2,8 @@ package com.example.lunadesk.ui
 
 import com.example.lunadesk.data.model.ModelInfo
 import com.example.lunadesk.data.local.ApiProfile
+import com.example.lunadesk.data.local.ApiProfileSettings
+import com.example.lunadesk.data.local.upsertProfile
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -80,5 +82,26 @@ class LunaDeskViewModelTest {
         )
 
         assertEquals("配置 2", nextProfileName(profiles))
+    }
+
+    @Test
+    fun `copy profile keeps all connection and generation fields without switching active profile`() {
+        val source = ApiProfile("source", "工作", "https://example.com/v1", "example-key", "model-a", 0.7f, 4096)
+        val settings = ApiProfileSettings("source", listOf(source))
+
+        val copy = copiedProfile(source, settings.profiles, "copy")
+        val saved = upsertProfile(settings, copy, makeActive = false)
+
+        assertEquals(source.copy(id = "copy", name = "工作 副本"), copy)
+        assertEquals("source", saved.activeProfileId)
+        assertEquals(listOf(source, copy), saved.profiles)
+    }
+
+    @Test
+    fun `copy profile chooses unused numbered name ignoring case`() {
+        val source = ApiProfile("source", "工作")
+        val profiles = listOf(source, ApiProfile("one", "工作 副本"), ApiProfile("two", "工作 副本 2"))
+
+        assertEquals("工作 副本 3", copiedProfile(source, profiles, "copy").name)
     }
 }

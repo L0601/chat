@@ -18,6 +18,7 @@ import java.net.URI
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -101,6 +102,7 @@ class LunaDeskViewModel(
     private val _uiState = MutableStateFlow(LunaDeskUiState())
     val uiState: StateFlow<LunaDeskUiState> = _uiState.asStateFlow()
     private val historyMutex = Mutex()
+    private val profileCopyMutex = Mutex()
 
     init {
         viewModelScope.launch {
@@ -167,6 +169,22 @@ class LunaDeskViewModel(
     fun requestEditProfile(profileId: String) {
         if (uiState.value.editorDraft?.id == profileId) return
         runOrQueue(PendingProfileAction.EditProfile(profileId)) { openProfileEditor(profileId) }
+    }
+
+    fun copyProfile(profileId: String) {
+        viewModelScope.launch {
+            runCatching {
+                profileCopyMutex.withLock {
+                    val settings = profileStore.settings.first()
+                    val source = settings.profiles.firstOrNull { it.id == profileId }
+                        ?: error("配置不存在")
+                    val copy = copiedProfile(source, settings.profiles, idGenerator.nextId())
+                    profileStore.upsert(copy, makeActive = false)
+                    copy.name
+                }
+            }.onSuccess { showToast("已复制为 $it") }
+                .onFailure { showToast(readableError(it)) }
+        }
     }
 
     fun requestCloseEditor() {
@@ -601,6 +619,15 @@ internal fun nextProfileName(profiles: List<ApiProfile>): String {
     return generateSequence(1) { it + 1 }
         .map { "配置 $it" }
         .first { it !in names }
+}
+
+internal fun copiedProfile(source: ApiProfile, profiles: List<ApiProfile>, newId: String): ApiProfile {
+    val baseName = "${source.name.trim()} 副本"
+    val usedNames = profiles.map { it.name.lowercase() }.toSet()
+    val name = generateSequence(1) { it + 1 }
+        .map { if (it == 1) baseName else "$baseName $it" }
+        .first { it.lowercase() !in usedNames }
+    return source.copy(id = newId, name = name)
 }
 
 internal fun nextToastEvent(message: String, current: ToastEvent?): ToastEvent {

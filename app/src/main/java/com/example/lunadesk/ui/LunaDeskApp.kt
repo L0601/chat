@@ -130,6 +130,7 @@ fun LunaDeskRoot(viewModel: LunaDeskViewModel) {
                         onBack = { viewModel.switchTab(AppTab.Chat) },
                         onCreate = viewModel::requestCreateProfile,
                         onEdit = viewModel::requestEditProfile,
+                        onCopy = viewModel::copyProfile,
                         onCloseEditor = viewModel::requestCloseEditor,
                         onActivate = viewModel::requestActivateProfile,
                         onDelete = viewModel::requestDeleteProfile,

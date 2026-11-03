@@ -30,8 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Search
@@ -40,6 +39,8 @@ import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -79,6 +80,7 @@ data class SettingsActions(
     val onBack: () -> Unit,
     val onCreate: () -> Unit,
     val onEdit: (String) -> Unit,
+    val onCopy: (String) -> Unit,
     val onCloseEditor: () -> Unit,
     val onActivate: (String) -> Unit,
     val onDelete: (String) -> Unit,
@@ -177,6 +179,7 @@ private fun ProfileList(
                 isActive = profile.id == state.activeProfileId,
                 canDelete = state.profiles.size > 1,
                 onEdit = { actions.onEdit(profile.id) },
+                onCopy = { actions.onCopy(profile.id) },
                 onActivate = { actions.onActivate(profile.id) },
                 onDelete = { actions.onDelete(profile.id) }
             )
@@ -227,9 +230,11 @@ private fun ProfileCard(
     isActive: Boolean,
     canDelete: Boolean,
     onEdit: () -> Unit,
+    onCopy: () -> Unit,
     onActivate: () -> Unit,
     onDelete: () -> Unit
 ) {
+    var menuExpanded by remember(profile.id) { mutableStateOf(false) }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.small,
@@ -284,11 +289,16 @@ private fun ProfileCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                IconButton(onClick = onEdit) {
-                    Icon(Icons.Outlined.Edit, contentDescription = "编辑 ${profile.name}")
-                }
-                IconButton(onClick = onDelete, enabled = canDelete) {
-                    Icon(Icons.Outlined.Delete, contentDescription = "删除 ${profile.name}")
+                Box {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "${profile.name} 的更多操作")
+                    }
+                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        DropdownMenuItem(text = { Text("编辑") }, onClick = { menuExpanded = false; onEdit() })
+                        DropdownMenuItem(text = { Text("复制配置") }, onClick = { menuExpanded = false; onCopy() })
+                        DropdownMenuItem(text = { Text("删除") }, enabled = canDelete,
+                            onClick = { menuExpanded = false; onDelete() })
+                    }
                 }
             }
             if (!isActive) {
