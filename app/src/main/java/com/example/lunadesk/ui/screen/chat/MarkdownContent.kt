@@ -42,7 +42,7 @@ private fun MarkdownTable(rows: List<List<String>>, color: Color) {
     val columns = rows.firstOrNull()?.size?.coerceAtLeast(1) ?: return
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val viewportWidth = maxWidth
-        val tableWidth = maxOf(viewportWidth, 120.dp * columns)
+        val tableWidth = maxOf(viewportWidth, 112.dp * columns)
         Column {
             if (tableWidth > viewportWidth) {
                 Text("左右滑动查看表格", style = MaterialTheme.typography.labelMedium,

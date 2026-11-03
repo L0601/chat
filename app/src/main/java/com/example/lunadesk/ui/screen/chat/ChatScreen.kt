@@ -547,19 +547,16 @@ private fun MessageBlock(message: ChatMessageUi) {
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         copyMessage(context, message.content)
     }
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
-    ) {
-        Box(
-            modifier = Modifier
-                .then(if (isUser) Modifier.widthIn(max = 320.dp) else Modifier.fillMaxWidth())
-                .combinedClickable(onClick = {}, onLongClick = copy)
+    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
+        if (isUser) Box(
+            modifier = Modifier.widthIn(max = 320.dp).combinedClickable(onClick = {}, onLongClick = copy)
         ) {
-            if (isUser) UserMessage(message) else AssistantMessage(message)
+            UserMessage(message)
             if (message.content.isNotBlank() && !message.isStreaming) {
                 CopyButton(onClick = copy, modifier = Modifier.align(Alignment.TopEnd))
             }
+        } else {
+            AssistantMessage(message, copy)
         }
     }
 }
@@ -584,11 +581,11 @@ private fun UserMessage(message: ChatMessageUi) {
 }
 
 @Composable
-private fun AssistantMessage(message: ChatMessageUi) {
+private fun AssistantMessage(message: ChatMessageUi, onCopy: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 2.dp, end = 46.dp),
+            .padding(start = 2.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         if (message.isStreaming && message.content.isBlank()) {
@@ -596,7 +593,10 @@ private fun AssistantMessage(message: ChatMessageUi) {
         } else {
             MessageText(message, MaterialTheme.colorScheme.onSurface)
             if (message.isStreaming) BlinkingCursor()
-            else MessageMetrics(message.metrics)
+            else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { MessageMetrics(message.metrics) }
+                if (message.content.isNotBlank()) CopyButton(onClick = onCopy)
+            }
         }
     }
 }
