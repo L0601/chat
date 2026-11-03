@@ -19,13 +19,36 @@ private fun CallMetrics.speed(): Double? = if ((outputTokens ?: 0) > 0 && (outpu
 @Composable
 internal fun MessageMetrics(metrics: CallMetrics?) {
     if (metrics == null) return
-    val parts = buildList {
-        metrics.inputTokens?.let { add("输入 $it") }
-        metrics.outputTokens?.let { add("输出 $it token") }
-        metrics.speed()?.let { add("速度 ${rate(it)}（估算）") }
-        metrics.firstTextMs?.let { add("首字 ${seconds(it.toDouble())}") }
+    if (metrics.inputTokens == null && metrics.outputTokens == null &&
+        metrics.speed() == null && metrics.firstTextMs == null) return
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Row(Modifier.fillMaxWidth()) {
+            MetricCell("输入", metrics.inputTokens?.let { "$it token" }, Modifier.weight(1f))
+            MetricCell("输出", metrics.outputTokens?.let { "$it token" }, Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth()) {
+            MetricCell("速度", metrics.speed()?.let { "≈${rate(it)}" }, Modifier.weight(1f))
+            MetricCell("首字", metrics.firstTextMs?.let { seconds(it.toDouble()) }, Modifier.weight(1f))
+        }
+        if (!metrics.completed) Text("未完成", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    if (parts.isNotEmpty()) Text((if (metrics.completed) "" else "未完成 · ") + parts.joinToString(" · "), modifier = Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun MetricCell(label: String, value: String?, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Text(label, modifier = Modifier.width(32.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            value ?: "—",
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
